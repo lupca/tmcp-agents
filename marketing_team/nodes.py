@@ -17,8 +17,8 @@ from .prompts import (
 
 # --- LLM Configuration ---
 # Using the same configuration as the main agent
-from langchain_google_genai import ChatGoogleGenerativeAI
-llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
+from langchain_ollama import ChatOllama
+llm = ChatOllama(model="qwen2.5", temperature=0, base_url="http://172.20.10.8:11434")
 
 # --- Agent Nodes ---
 

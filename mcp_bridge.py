@@ -18,6 +18,16 @@ async def execute_mcp_tool(tool_name: str, arguments: dict) -> Any:
             result = await session.call_tool(tool_name, arguments)
             return result
 
+async def execute_mcp_read_resource(uri: str) -> Any:
+    # URL of the standalone MCP server
+    sse_url = os.getenv("MCP_SERVER_URL", "http://localhost:7999/sse")
+
+    async with sse_client(sse_url) as (read, write):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+            result = await session.read_resource(uri)
+            return result
+
 # Tool Wrappers
 from langchain_core.tools import tool
 
@@ -85,6 +95,23 @@ async def delete_record(collection: str, record_id: str) -> str:
     result = await execute_mcp_tool("delete_record", {"collection": collection, "record_id": record_id})
     return result.content[0].text
 
+@tool
+async def read_resource(uri: str) -> str:
+    """Reads a resource from the MCP server.
+    Supported URIs:
+    - pocketbase:// : Lists all available collections
+    - pocketbase://{collection_name}/schema : Gets the schema for a collection
+    - pocketbase://{collection_name}/{record_id} : Gets a specific record
+    """
+    try:
+        # The result object has a 'contents' attribute which is a list of ResourceContent
+        result = await execute_mcp_read_resource(uri)
+        if result.contents and len(result.contents) > 0:
+            return result.contents[0].text
+        return "Resource empty or not found."
+    except Exception as e:
+        return f"Error reading resource {uri}: {e}"
+
 # Export all tools
 all_tools = [
     list_collections,
@@ -93,5 +120,7 @@ all_tools = [
     get_record,
     create_record,
     update_record,
-    delete_record
+    delete_record,
+    read_resource
 ]
+

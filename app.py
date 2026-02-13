@@ -36,8 +36,18 @@ async def on_message(message: cl.Message):
         kind = event["event"]
         
         if kind == "on_chat_model_stream":
-            content = event["data"]["chunk"].content
+            chunk = event["data"]["chunk"]
+            content = chunk.content
+            
             if content:
-                await msg.stream_token(content)
-                
+                if isinstance(content, str):
+                    await msg.stream_token(content)
+                elif isinstance(content, list):
+                    # Handle cases where content is a list (e.g., complex blocks)
+                    for item in content:
+                        if isinstance(item, str):
+                            await msg.stream_token(item)
+                        elif isinstance(item, dict) and "text" in item:
+                             await msg.stream_token(item["text"])
+    
     await msg.send()
