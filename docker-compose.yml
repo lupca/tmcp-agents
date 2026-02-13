@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  agent:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - POCKETBASE_URL=${POCKETBASE_URL:-http://host.docker.internal:8090}
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://host.docker.internal:11434}
+      - POCKETBASE_USER=${POCKETBASE_USER:-admin@admin.com}
+      - POCKETBASE_PASSWORD=${POCKETBASE_PASSWORD:-123qweasdzxc}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
