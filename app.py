@@ -1,4 +1,11 @@
+
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
 import chainlit as cl
+
 from agent import app_graph
 from langchain_core.messages import HumanMessage
 from langgraph.graph import StateGraph, START, END
