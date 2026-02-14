@@ -1,3 +1,5 @@
+import sys, os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 import asyncio
 from langchain_core.messages import HumanMessage
 
@@ -12,7 +14,7 @@ STRATEGIST_PROMPT = "You are a strategist."
 from langchain_google_genai import ChatGoogleGenerativeAI
 llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0)
 
-async def debug_strategist_no_tools():
+async def test_strategist_no_tools():
     print("Debugging Strategist Node (No Tools)...")
     
     agent = create_react_agent(llm, tools=all_tools, prompt=STRATEGIST_PROMPT)
@@ -33,4 +35,4 @@ async def debug_strategist_no_tools():
         traceback.print_exc()
 
 if __name__ == "__main__":
-    asyncio.run(debug_strategist_no_tools())
+    asyncio.run(test_strategist_no_tools())

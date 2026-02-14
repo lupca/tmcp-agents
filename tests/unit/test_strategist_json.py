@@ -1,18 +1,21 @@
+import sys, os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 import asyncio
+from typing import Any, Dict
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from mcp_bridge import list_collections
+from mcp_bridge import create_record
 
-# Only one tool
-tools = [list_collections]
+# Only create_record tool
+tools = [create_record]
 
-STRATEGIST_PROMPT = "You are a strategist. List the collections in the database."
+STRATEGIST_PROMPT = "You are a strategist. Create a record in 'business_ideas' with data_json '{\"foo\": \"bar\"}'."
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0)
 
-async def debug_strategist_one_tool():
-    print("Debugging Strategist Node (One Tool)...")
+async def test_strategist_json():
+    print("Debugging Strategist Node (create_record JSON)...")
     
     llm_with_tools = llm.bind_tools(tools)
     messages = [
@@ -22,6 +25,7 @@ async def debug_strategist_one_tool():
     
     print("Invoking llm...")
     try:
+        # Using ainvoke
         result = await llm_with_tools.ainvoke(messages)
         print("Result:", result)
     except Exception as e:
@@ -30,4 +34,4 @@ async def debug_strategist_one_tool():
         traceback.print_exc()
 
 if __name__ == "__main__":
-    asyncio.run(debug_strategist_one_tool())
+    asyncio.run(test_strategist_json())

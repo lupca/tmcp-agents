@@ -1,9 +1,8 @@
 from typing import Literal
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate
-
-from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
+import os
 
 from mcp_bridge import all_tools
 from .state import MarketingState
@@ -18,7 +17,9 @@ from .prompts import (
 # --- LLM Configuration ---
 # Using the same configuration as the main agent
 from langchain_ollama import ChatOllama
-llm = ChatOllama(model="qwen2.5", temperature=0, base_url="http://172.20.10.8:11434")
+
+ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://172.20.10.8:11434")
+llm = ChatOllama(model="qwen2.5", temperature=0, base_url=ollama_base_url)
 
 # --- Agent Nodes ---
 

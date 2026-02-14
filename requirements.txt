@@ -3,7 +3,7 @@ langchain-community
 langchain-ollama
 langgraph
 requests
-chainlit
+
 pydantic
 mcp
 langchain-mcp-adapters
@@ -13,3 +13,5 @@ langchain-google-genai
 ddgs
 python-dotenv
 langsmith
+pytest
+pytest-asyncio

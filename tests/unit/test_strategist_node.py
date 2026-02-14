@@ -1,9 +1,11 @@
+import sys, os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 import asyncio
 from langchain_core.messages import HumanMessage
 from marketing_team.nodes import strategist_node
 from marketing_team.state import MarketingState
 
-async def debug_strategist():
+async def test_strategist():
     print("Debugging Strategist Node...")
     state = {
         "messages": [
@@ -22,4 +24,4 @@ async def debug_strategist():
         traceback.print_exc()
 
 if __name__ == "__main__":
-    asyncio.run(debug_strategist())
+    asyncio.run(test_strategist())

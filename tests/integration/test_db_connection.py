@@ -1,7 +1,9 @@
+import sys, os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 import asyncio
 from mcp_bridge import list_records
 
-async def verify_db():
+async def test_db():
     collections = [
         "business_ideas",
         "brand_identities",
@@ -22,4 +24,4 @@ async def verify_db():
             print(f"Error listing {col}: {e}")
 
 if __name__ == "__main__":
-    asyncio.run(verify_db())
+    asyncio.run(test_db())
