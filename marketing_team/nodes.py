@@ -1,22 +1,25 @@
-from typing import Literal
-from langchain_core.messages import SystemMessage, HumanMessage
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import RunnableConfig
 import os
 
+from langchain_community.tools import DuckDuckGoSearchRun
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnableConfig
+from langchain_ollama import ChatOllama
+from langgraph.prebuilt import ToolNode
+
 from mcp_bridge import all_tools
-from .state import MarketingState
+
 from .prompts import (
-    STRATEGIST_PROMPT,
     CAMPAIGN_MANAGER_PROMPT,
-    RESEARCHER_PROMPT,
     CONTENT_CREATOR_PROMPT,
-    SUPERVISOR_PROMPT
+    RESEARCHER_PROMPT,
+    STRATEGIST_PROMPT,
+    SUPERVISOR_PROMPT,
 )
+from .state import MarketingState
 
 # --- LLM Configuration ---
 # Using the same configuration as the main agent
-from langchain_ollama import ChatOllama
 
 ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://172.20.10.8:11434")
 llm = ChatOllama(model="qwen2.5", temperature=0, base_url=ollama_base_url)
@@ -25,9 +28,6 @@ llm = ChatOllama(model="qwen2.5", temperature=0, base_url=ollama_base_url)
 
 
 # --- Helper for Manual Tool Loop ---
-from langgraph.prebuilt import ToolNode
-from langchain_core.messages import ToolMessage
-from langchain_community.tools import DuckDuckGoSearchRun
 
 # Define the search tool
 search_tool = DuckDuckGoSearchRun()
