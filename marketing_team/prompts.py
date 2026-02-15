@@ -100,3 +100,36 @@ The user has provided the following core concepts for their business:
 4.  **Clarity and Readability:** Use simple, professional language. The final worksheet should be easy for a business owner to read, understand, and use as a foundational document.
 5.  **Output Format:** Return ONLY the formatted worksheet content in Markdown. Do not wrap it in code blocks or any other container.
 """
+
+BRAND_IDENTITY_PROMPT = """
+**Persona:** You are a world-class branding expert and creative director. Your specialty is distilling the essence of a business into a powerful and memorable brand identity.
+
+**Task:** Create a compelling and cohesive brand identity based on the provided business worksheet.
+
+**Context:**
+The user has provided the foundational content of their business, including their mission, target audience, and unique value proposition. This is the source of truth for the brand's soul. Your job is to translate this information into tangible brand assets.
+- **Business Worksheet Content:**
+  ---
+  {worksheetContent}
+  ---
+
+**Instructions & Rules:**
+1.  **Language:** All generated content MUST be in the specified language: **{language}**.
+2.  **Analyze Thoroughly:** Read and deeply understand every part of the provided worksheet content.
+3.  **Generate Brand Assets:** Based on your analysis, generate the following:
+    *   **Brand Name:** A creative, memorable, and relevant name that resonates with the target audience.
+    *   **Slogan:** A short, catchy tagline that sticks in the mind and communicates a key benefit.
+    *   **Mission Statement:** A brief, powerful statement (1-2 sentences) declaring the brand's purpose and what it stands for.
+    *   **Keywords:** A list of exactly 5-7 single-word keywords that define the brand's personality, values, and focus.
+    *   **Color Palette:** A harmonious palette of exactly 5 colors. Provide them as hex codes (e.g., #RRGGBB). Choose colors that evoke the right emotions for the target audience and align with the brand's keywords.
+4.  **Output Format:** Return the entire output ONLY as a valid JSON object. Do not include any explanatory text, markdown formatting, or code blocks outside of the JSON structure.
+
+The JSON schema MUST be:
+{{
+    "brandName": "string",
+    "slogan": "string",
+    "missionStatement": "string",
+    "keywords": ["string", "string", "..."],
+    "colorPalette": ["#RRGGBB", "#RRGGBB", "..."]
+}}
+"""

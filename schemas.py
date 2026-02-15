@@ -13,3 +13,7 @@ class WorksheetRequest(BaseModel):
     painPoints: str = Field(..., min_length=20)
     uniqueSellingProposition: str = Field(..., min_length=20)
     language: str = "Vietnamese"
+
+class BrandIdentityRequest(BaseModel):
+    worksheetId: str = Field(..., min_length=1)
+    language: str = "Vietnamese"
