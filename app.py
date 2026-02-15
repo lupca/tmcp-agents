@@ -3,8 +3,9 @@ from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-from schemas import ChatRequest
+from schemas import ChatRequest, WorksheetRequest
 from services import chat_event_generator
+from worksheet_service import worksheet_event_generator
 
 # Load environment variables
 load_dotenv()
@@ -27,6 +28,19 @@ async def chat_endpoint(request: ChatRequest):
         media_type="text/event-stream"
     )
 
+@app.post("/generate-worksheet")
+async def generate_worksheet(request: WorksheetRequest):
+    return StreamingResponse(
+        worksheet_event_generator(
+            business_description=request.businessDescription,
+            target_audience=request.targetAudience,
+            pain_points=request.painPoints,
+            usp=request.uniqueSellingProposition,
+            language=request.language,
+        ),
+        media_type="text/event-stream"
+    )
+
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
@@ -34,3 +48,4 @@ async def health_check():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
