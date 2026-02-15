@@ -1,12 +1,10 @@
-import os
-
 from langchain_community.tools import DuckDuckGoSearchRun
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
-from langchain_ollama import ChatOllama
 from langgraph.prebuilt import ToolNode
 
+from llm_factory import get_ollama_llm
 from mcp_bridge import all_tools
 
 from .prompts import (
@@ -19,10 +17,7 @@ from .prompts import (
 from .state import MarketingState
 
 # --- LLM Configuration ---
-# Using the same configuration as the main agent
-
-ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://172.20.10.8:11434")
-llm = ChatOllama(model="qwen2.5", temperature=0, base_url=ollama_base_url)
+llm = get_ollama_llm(temperature=0)
 
 # --- Agent Nodes ---
 
