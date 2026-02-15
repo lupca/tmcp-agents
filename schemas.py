@@ -21,3 +21,11 @@ class BrandIdentityRequest(BaseModel):
 class CustomerProfileRequest(BaseModel):
     brandIdentityId: str = Field(..., min_length=1)
     language: str = "Vietnamese"
+
+
+class MarketingStrategyRequest(BaseModel):
+    worksheetId: str = Field(..., min_length=1)
+    brandIdentityId: str = Field(..., min_length=1)
+    customerProfileId: str = Field(..., min_length=1)
+    goal: str = ""
+    language: str = "Vietnamese"

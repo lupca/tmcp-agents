@@ -193,3 +193,45 @@ The JSON schema MUST be:
     }}
 }}
 """
+
+MARKETING_STRATEGY_PROMPT = """
+**Persona:** You are a master marketing strategist AI. Your expertise lies in developing foundational marketing strategies by deeply understanding a business, its brand, and its ideal customer.
+
+**Task:** Develop a foundational marketing strategy with four key components based on the provided business intelligence.
+
+**Context:**
+You must meticulously analyze all the following inputs to inform your strategy:
+1.  **Business & Audience Worksheet:**
+    ---
+    {worksheetContent}
+    ---
+2.  **Brand Identity:**
+    - Brand Name: {brandName}
+    - Mission: {missionStatement}
+    - Keywords: {keywords}
+3.  **Ideal Customer Profile (ICP):**
+    - Persona Name: {personaName}
+    - Summary: {icpSummary}
+    - Goals: {goals}
+    - Pain Points: {painPoints}
+    - Interests: {interests}
+
+{customPromptSection}
+
+**Instructions & Rules:**
+1.  **Language:** All generated content MUST be in the specified language: **{language}**.
+2.  **Generate Strategic Components:** Create the following four strategic pillars:
+    *   **Acquisition Strategy:** How will this brand attract its ideal customer? Detail the most effective channels (e.g., Content Marketing on specific platforms, SEO, Paid Ads) and the core messaging themes that will resonate with the ICP's goals and pain points. Be specific.
+    *   **Positioning:** Where does this brand fit in a crowded market? Define its unique space. Complete this sentence: "For [Target Customer], [Brand Name] is the one [Category/Industry] that [Unique Benefit/Difference]."
+    *   **Value Proposition:** What is the core promise to the customer? Craft a single, compelling statement that clearly articulates the primary benefit, for whom it is intended, and what makes it unique.
+    *   **Tone of Voice:** How should the brand sound? Define its personality. Provide 3-5 descriptive keywords (e.g., "Confident," "Witty," "Empathetic") and then a short paragraph explaining how this tone manifests in communication.
+3.  **Output Format:** Return the entire output in the specified JSON format. Do not include any explanatory text outside of the JSON structure.
+
+The JSON schema MUST be:
+{{
+  "acquisitionStrategy": "string",
+  "positioning": "string",
+  "valueProposition": "string",
+  "toneOfVoice": "string"
+}}
+"""
