@@ -17,3 +17,7 @@ class WorksheetRequest(BaseModel):
 class BrandIdentityRequest(BaseModel):
     worksheetId: str = Field(..., min_length=1)
     language: str = "Vietnamese"
+
+class CustomerProfileRequest(BaseModel):
+    brandIdentityId: str = Field(..., min_length=1)
+    language: str = "Vietnamese"

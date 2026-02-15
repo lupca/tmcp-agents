@@ -133,3 +133,63 @@ The JSON schema MUST be:
     "colorPalette": ["#RRGGBB", "#RRGGBB", "..."]
 }}
 """
+
+CUSTOMER_PROFILE_PROMPT = """
+**Persona:** You are an expert market researcher and brand strategist. Your skill is in synthesizing data to create a single, vivid, and actionable "Ideal Customer Profile" (ICP) or persona.
+
+**Task:** Create one detailed ICP based on the provided business worksheet and brand identity.
+
+**Context:**
+You have been given foundational documents for a business. Your task is to analyze them thoroughly to build a profile of the *single* most ideal customer for this brand.
+- **Business & Audience Worksheet:**
+  ---
+  {worksheetContent}
+  ---
+- **Brand Identity:**
+  ---
+  - Brand Name: {brandName}
+  - Slogan: {slogan}
+  - Mission: {missionStatement}
+  - Keywords: {keywords}
+  ---
+
+**Instructions & Rules:**
+1.  **Language:** All generated content MUST be in the specified language: **{language}**.
+2.  **Synthesize, Don't List:** Do not simply list different customer types. Synthesize all the information into a single, cohesive persona that represents the core target.
+3.  **Generate Profile Sections:** The profile must contain the following specific sections. Be creative and insightful.
+    *   `personaName`: A catchy, descriptive name for this persona.
+    *   `summary`: A brief, 2-3 sentence story that brings this person to life.
+    *   `demographics`: Key demographic data as a JSON object with keys: age, gender, location, occupation, income.
+    *   `psychographics`: The persona's psychological attributes as a JSON object with keys: values, interests, personality.
+    *   `goalsAndMotivations`: What drives them in relation to this brand, as a JSON object with keys: primaryGoal, secondaryGoal, motivation.
+    *   `painPointsAndChallenges`: The specific problems they face that this brand can solve, as a JSON object with keys: primaryPain, challenges, frustrations.
+4.  **Output Format:** Return the entire profile ONLY as a valid JSON object. Do not include any text outside the JSON structure.
+
+The JSON schema MUST be:
+{{
+    "personaName": "string",
+    "summary": "string",
+    "demographics": {{
+        "age": "string",
+        "gender": "string",
+        "location": "string",
+        "occupation": "string",
+        "income": "string"
+    }},
+    "psychographics": {{
+        "values": "string",
+        "interests": "string",
+        "personality": "string"
+    }},
+    "goalsAndMotivations": {{
+        "primaryGoal": "string",
+        "secondaryGoal": "string",
+        "motivation": "string"
+    }},
+    "painPointsAndChallenges": {{
+        "primaryPain": "string",
+        "challenges": "string",
+        "frustrations": "string"
+    }}
+}}
+"""

@@ -5,6 +5,7 @@ from typing import AsyncGenerator
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from llm_factory import get_ollama_llm
+from llm_utils import parse_json_response
 from marketing_team.prompts import BRAND_IDENTITY_PROMPT
 from mcp_bridge import execute_mcp_tool
 from sse import sse_event
@@ -77,7 +78,7 @@ async def brand_identity_event_generator(
 
         # --- Step 4: Parse JSON and emit done ---
         try:
-            brand_data = _parse_json_response(full_content)
+            brand_data = parse_json_response(full_content)
             yield sse_event("done", brandIdentity=brand_data)
         except ValueError as e:
             logger.error(f"JSON parsing failed: {e}")
@@ -90,34 +91,3 @@ async def brand_identity_event_generator(
         logger.error(f"Error in brand identity generator: {e}")
         yield sse_event("error", error=str(e))
 
-
-def _parse_json_response(text: str) -> dict:
-    """Extract and parse JSON from an LLM response that may contain extra text."""
-    # Try direct parse first
-    stripped = text.strip()
-    try:
-        return json.loads(stripped)
-    except json.JSONDecodeError:
-        pass
-
-    # Try to find JSON block within markdown code fences
-    if "```" in stripped:
-        for block in stripped.split("```"):
-            block = block.strip()
-            if block.startswith("json"):
-                block = block[4:].strip()
-            try:
-                return json.loads(block)
-            except json.JSONDecodeError:
-                continue
-
-    # Try to find JSON by matching braces
-    start = stripped.find("{")
-    end = stripped.rfind("}")
-    if start != -1 and end != -1 and end > start:
-        try:
-            return json.loads(stripped[start : end + 1])
-        except json.JSONDecodeError:
-            pass
-
-    raise ValueError(f"Could not parse JSON from LLM response: {stripped[:200]}")

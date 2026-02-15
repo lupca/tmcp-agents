@@ -6,36 +6,37 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from brand_identity_service import brand_identity_event_generator, _parse_json_response
+from brand_identity_service import brand_identity_event_generator
+from llm_utils import parse_json_response
 
 
-# --- Unit tests for _parse_json_response ---
+# --- Unit tests for parse_json_response ---
 
 class TestParseJsonResponse:
     def test_parse_clean_json(self):
         raw = '{"brandName": "Test", "slogan": "Hello"}'
-        result = _parse_json_response(raw)
+        result = parse_json_response(raw)
         assert result["brandName"] == "Test"
         assert result["slogan"] == "Hello"
 
     def test_parse_json_with_whitespace(self):
         raw = '  \n  {"brandName": "Test"}  \n  '
-        result = _parse_json_response(raw)
+        result = parse_json_response(raw)
         assert result["brandName"] == "Test"
 
     def test_parse_json_in_code_fence(self):
         raw = 'Here is the result:\n```json\n{"brandName": "Test"}\n```\n'
-        result = _parse_json_response(raw)
+        result = parse_json_response(raw)
         assert result["brandName"] == "Test"
 
     def test_parse_json_with_surrounding_text(self):
         raw = 'Based on my analysis:\n{"brandName": "Test", "slogan": "Go"}\nThat is my result.'
-        result = _parse_json_response(raw)
+        result = parse_json_response(raw)
         assert result["brandName"] == "Test"
 
     def test_parse_invalid_json_raises(self):
         with pytest.raises(ValueError, match="Could not parse JSON"):
-            _parse_json_response("This is not JSON at all")
+            parse_json_response("This is not JSON at all")
 
     def test_parse_full_brand_identity(self):
         raw = json.dumps({
@@ -45,7 +46,7 @@ class TestParseJsonResponse:
             "keywords": ["innovation", "light", "clarity", "growth", "trust"],
             "colorPalette": ["#6c5ce7", "#00cec9", "#fd79a8", "#ffeaa7", "#2d3436"],
         })
-        result = _parse_json_response(raw)
+        result = parse_json_response(raw)
         assert result["brandName"] == "Aurora"
         assert len(result["keywords"]) == 5
         assert len(result["colorPalette"]) == 5

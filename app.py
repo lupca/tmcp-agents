@@ -3,10 +3,11 @@ from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-from schemas import ChatRequest, WorksheetRequest, BrandIdentityRequest
+from schemas import ChatRequest, WorksheetRequest, BrandIdentityRequest, CustomerProfileRequest
 from services import chat_event_generator
 from worksheet_service import worksheet_event_generator
 from brand_identity_service import brand_identity_event_generator
+from customer_profile_service import customer_profile_event_generator
 
 # Load environment variables
 load_dotenv()
@@ -47,6 +48,16 @@ async def generate_brand_identity(request: BrandIdentityRequest):
     return StreamingResponse(
         brand_identity_event_generator(
             worksheet_id=request.worksheetId,
+            language=request.language,
+        ),
+        media_type="text/event-stream"
+    )
+
+@app.post("/generate-customer-profile")
+async def generate_customer_profile(request: CustomerProfileRequest):
+    return StreamingResponse(
+        customer_profile_event_generator(
+            brand_identity_id=request.brandIdentityId,
             language=request.language,
         ),
         media_type="text/event-stream"
