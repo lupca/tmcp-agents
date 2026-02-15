@@ -15,3 +15,5 @@ python-dotenv
 langsmith
 pytest
 pytest-asyncio
+fastapi
+uvicorn
