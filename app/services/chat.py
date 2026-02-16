@@ -4,7 +4,7 @@ from typing import AsyncGenerator
 from langchain_core.messages import HumanMessage
 
 from agent import app_graph
-from sse import sse_event
+from app.utils.sse import sse_event
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

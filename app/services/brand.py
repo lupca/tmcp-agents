@@ -4,11 +4,11 @@ from typing import AsyncGenerator
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from llm_factory import get_ollama_llm
-from llm_utils import parse_json_response
+from app.core.llm_factory import get_ollama_llm
+from app.utils.llm import parse_json_response
 from marketing_team.prompts import BRAND_IDENTITY_PROMPT
-from mcp_bridge import execute_mcp_tool
-from sse import sse_event
+from app.tools.mcp_bridge import execute_mcp_tool
+from app.utils.sse import sse_event
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

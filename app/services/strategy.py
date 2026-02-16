@@ -5,12 +5,12 @@ from typing import AsyncGenerator, Dict, Any
 from langchain_core.messages import SystemMessage, HumanMessage
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
-from mcp_bridge import execute_mcp_tool
+from app.tools.mcp_bridge import execute_mcp_tool
 
-from llm_factory import get_ollama_llm
+from app.core.llm_factory import get_ollama_llm
 from marketing_team.prompts import MARKETING_STRATEGY_PROMPT
-from services import sse_event
-from llm_utils import parse_json_response
+from app.utils.sse import sse_event
+from app.utils.llm import parse_json_response
 
 async def marketing_strategy_event_generator(
     worksheet_id: str,

@@ -1,7 +1,7 @@
 import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 import asyncio
-from mcp_bridge import list_records
+from app.tools.mcp_bridge import list_records
 
 async def test_db():
     collections = [

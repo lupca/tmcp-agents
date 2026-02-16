@@ -3,12 +3,12 @@ from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-from schemas import ChatRequest, WorksheetRequest, BrandIdentityRequest, CustomerProfileRequest, MarketingStrategyRequest
-from services import chat_event_generator
-from worksheet_service import worksheet_event_generator
-from brand_identity_service import brand_identity_event_generator
-from customer_profile_service import customer_profile_event_generator
-from marketing_strategy_service import marketing_strategy_event_generator
+from app.models.schemas import ChatRequest, WorksheetRequest, BrandIdentityRequest, CustomerProfileRequest, MarketingStrategyRequest
+from app.services.chat import chat_event_generator
+from app.services.worksheet import worksheet_event_generator
+from app.services.brand import brand_identity_event_generator
+from app.services.customer import customer_profile_event_generator
+from app.services.strategy import marketing_strategy_event_generator
 
 # Load environment variables
 load_dotenv()

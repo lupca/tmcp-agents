@@ -4,8 +4,8 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
 from langgraph.prebuilt import ToolNode
 
-from llm_factory import get_ollama_llm
-from mcp_bridge import all_tools
+from app.core.llm_factory import get_ollama_llm
+from app.tools.mcp_bridge import all_tools
 
 from .prompts import (
     CAMPAIGN_MANAGER_PROMPT,

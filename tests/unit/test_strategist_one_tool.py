@@ -3,7 +3,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 import asyncio
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from mcp_bridge import list_collections
+from app.tools.mcp_bridge import list_collections
 
 # Only one tool
 tools = [list_collections]

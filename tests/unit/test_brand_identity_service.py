@@ -6,8 +6,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from brand_identity_service import brand_identity_event_generator
-from llm_utils import parse_json_response
+from app.services.brand import brand_identity_event_generator
+from app.utils.llm import parse_json_response
 
 
 # --- Unit tests for parse_json_response ---
@@ -89,8 +89,8 @@ class TestBrandIdentityEventGenerator:
         mock_llm = MagicMock()
         mock_llm.astream = mock_astream
 
-        with patch("brand_identity_service.execute_mcp_tool", new_callable=AsyncMock, return_value=mock_mcp_result), \
-             patch("brand_identity_service.get_ollama_llm", return_value=mock_llm):
+        with patch("app.services.brand.execute_mcp_tool", new_callable=AsyncMock, return_value=mock_mcp_result), \
+             patch("app.services.brand.get_ollama_llm", return_value=mock_llm):
 
             events = []
             async for event in brand_identity_event_generator("ws123", "English"):
@@ -111,7 +111,7 @@ class TestBrandIdentityEventGenerator:
     @pytest.mark.asyncio
     async def test_mcp_failure_emits_error(self):
         """When MCP tool call fails, should emit an error event."""
-        with patch("brand_identity_service.execute_mcp_tool", new_callable=AsyncMock, side_effect=Exception("MCP connection refused")):
+        with patch("app.services.brand.execute_mcp_tool", new_callable=AsyncMock, side_effect=Exception("MCP connection refused")):
 
             events = []
             async for event in brand_identity_event_generator("bad_id", "English"):
@@ -137,8 +137,8 @@ class TestBrandIdentityEventGenerator:
         mock_llm = MagicMock()
         mock_llm.astream = mock_astream
 
-        with patch("brand_identity_service.execute_mcp_tool", new_callable=AsyncMock, return_value=mock_mcp_result), \
-             patch("brand_identity_service.get_ollama_llm", return_value=mock_llm):
+        with patch("app.services.brand.execute_mcp_tool", new_callable=AsyncMock, return_value=mock_mcp_result), \
+             patch("app.services.brand.get_ollama_llm", return_value=mock_llm):
 
             events = []
             async for event in brand_identity_event_generator("ws123", "English"):

@@ -6,7 +6,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from customer_profile_service import customer_profile_event_generator
+from app.services.customer import customer_profile_event_generator
 
 
 def _collect_events(raw_events):
@@ -86,8 +86,8 @@ class TestCustomerProfileEventGenerator:
         mock_llm = MagicMock()
         mock_llm.astream = mock_astream
 
-        with patch("customer_profile_service.execute_mcp_tool", side_effect=mock_execute_mcp_tool), \
-             patch("customer_profile_service.get_ollama_llm", return_value=mock_llm):
+        with patch("app.services.customer.execute_mcp_tool", side_effect=mock_execute_mcp_tool), \
+             patch("app.services.customer.get_ollama_llm", return_value=mock_llm):
 
             events = []
             async for event in customer_profile_event_generator("brand_123", "English"):
@@ -115,7 +115,7 @@ class TestCustomerProfileEventGenerator:
     @pytest.mark.asyncio
     async def test_brand_mcp_failure_emits_error(self):
         """When brand identity MCP fetch fails, should emit an error event."""
-        with patch("customer_profile_service.execute_mcp_tool", new_callable=AsyncMock, side_effect=Exception("MCP down")):
+        with patch("app.services.customer.execute_mcp_tool", new_callable=AsyncMock, side_effect=Exception("MCP down")):
             events = []
             async for event in customer_profile_event_generator("bad_id", "English"):
                 events.append(event)
@@ -140,7 +140,7 @@ class TestCustomerProfileEventGenerator:
                 return mock_brand_result
             raise Exception("Worksheet MCP failed")
 
-        with patch("customer_profile_service.execute_mcp_tool", side_effect=mock_execute_mcp_tool):
+        with patch("app.services.customer.execute_mcp_tool", side_effect=mock_execute_mcp_tool):
             events = []
             async for event in customer_profile_event_generator("brand_123", "English"):
                 events.append(event)
@@ -157,7 +157,7 @@ class TestCustomerProfileEventGenerator:
         mock_brand_result = MagicMock()
         mock_brand_result.content = [MagicMock(text=json.dumps(brand_no_ws))]
 
-        with patch("customer_profile_service.execute_mcp_tool", new_callable=AsyncMock, return_value=mock_brand_result):
+        with patch("app.services.customer.execute_mcp_tool", new_callable=AsyncMock, return_value=mock_brand_result):
             events = []
             async for event in customer_profile_event_generator("brand_123", "English"):
                 events.append(event)
@@ -189,8 +189,8 @@ class TestCustomerProfileEventGenerator:
         mock_llm = MagicMock()
         mock_llm.astream = mock_astream
 
-        with patch("customer_profile_service.execute_mcp_tool", side_effect=mock_execute_mcp_tool), \
-             patch("customer_profile_service.get_ollama_llm", return_value=mock_llm):
+        with patch("app.services.customer.execute_mcp_tool", side_effect=mock_execute_mcp_tool), \
+             patch("app.services.customer.get_ollama_llm", return_value=mock_llm):
 
             events = []
             async for event in customer_profile_event_generator("brand_123", "English"):

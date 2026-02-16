@@ -3,9 +3,9 @@ from typing import AsyncGenerator
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from llm_factory import get_ollama_llm
+from app.core.llm_factory import get_ollama_llm
 from marketing_team.prompts import WORKSHEET_PROMPT
-from sse import sse_event
+from app.utils.sse import sse_event
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

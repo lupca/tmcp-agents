@@ -27,4 +27,4 @@ ENV POCKETBASE_URL=http://localhost:8090
 ENV OLLAMA_HOST=http://localhost:11434
 
 # Define the command to run the application
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

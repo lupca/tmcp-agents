@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from marketing_strategy_service import marketing_strategy_event_generator
-from llm_utils import parse_json_response
+from app.services.strategy import marketing_strategy_event_generator
+from app.utils.llm import parse_json_response
 
 def _collect_events(raw_events):
     """Parse SSE event strings into dicts."""
@@ -82,8 +82,8 @@ class TestMarketingStrategyService:
         mock_llm = MagicMock()
         mock_llm.astream = mock_astream
 
-        with patch("marketing_strategy_service.execute_mcp_tool", side_effect=mock_execute_mcp_tool), \
-             patch("marketing_strategy_service.get_ollama_llm", return_value=mock_llm):
+        with patch("app.services.strategy.execute_mcp_tool", side_effect=mock_execute_mcp_tool), \
+             patch("app.services.strategy.get_ollama_llm", return_value=mock_llm):
 
             events = []
             async for event in marketing_strategy_event_generator(
@@ -112,7 +112,7 @@ class TestMarketingStrategyService:
     @pytest.mark.asyncio
     async def test_mcp_failure_handles_gracefully(self):
         """If one MCP call fails, it should emit an error."""
-        with patch("marketing_strategy_service.execute_mcp_tool", side_effect=Exception("Database down")):
+        with patch("app.services.strategy.execute_mcp_tool", side_effect=Exception("Database down")):
             events = []
             async for event in marketing_strategy_event_generator("ws", "bi", "icp"):
                 events.append(event)
@@ -145,8 +145,8 @@ class TestMarketingStrategyService:
         mock_llm = MagicMock()
         mock_llm.astream = mock_astream
 
-        with patch("marketing_strategy_service.execute_mcp_tool", return_value=mock_ws_result), \
-             patch("marketing_strategy_service.get_ollama_llm", return_value=mock_llm):
+        with patch("app.services.strategy.execute_mcp_tool", return_value=mock_ws_result), \
+             patch("app.services.strategy.get_ollama_llm", return_value=mock_llm):
              
             events = []
             async for event in marketing_strategy_event_generator("ws", "bi", "icp"):

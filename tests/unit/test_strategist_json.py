@@ -4,7 +4,7 @@ import asyncio
 from typing import Any, Dict
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from mcp_bridge import create_record
+from app.tools.mcp_bridge import create_record
 
 # Only create_record tool
 tools = [create_record]
