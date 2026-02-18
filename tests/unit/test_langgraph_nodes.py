@@ -1,7 +1,7 @@
 
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from unittest.mock import AsyncMock, patch
+from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.runnables import RunnableConfig
 from marketing_team.state import MarketingState
 from marketing_team.nodes import (
@@ -87,22 +87,23 @@ async def test_run_node_agent_with_tool_call():
 
 # --- Test supervisor_node ---
 
-def test_supervisor_node_routing():
+@pytest.mark.asyncio
+async def test_supervisor_node_routing():
     # Test routing to Strategist
     state = MarketingState(messages=[], next="")
     
-    # supervisor_chain.invoke(state) returns a message with agent name
+    # supervisor_chain.ainvoke(state) returns a message with agent name
     with patch("marketing_team.nodes.supervisor_chain") as mock_chain:
-        mock_chain.invoke.return_value = AIMessage(content="Strategist")
+        mock_chain.ainvoke = AsyncMock(return_value=AIMessage(content="Strategist"))
         
-        result = supervisor_node(state)
+        result = await supervisor_node(state)
         assert result["next"] == "Strategist"
         
     # Test routing to FINISH
     with patch("marketing_team.nodes.supervisor_chain") as mock_chain:
-        mock_chain.invoke.return_value = AIMessage(content="FINISH")
+        mock_chain.ainvoke = AsyncMock(return_value=AIMessage(content="FINISH"))
         
-        result = supervisor_node(state)
+        result = await supervisor_node(state)
         assert "FINISH" in result["next"] or result["next"] == "FINISH"
 
 # --- Test specific node (Strategist) ---
