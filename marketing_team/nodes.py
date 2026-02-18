@@ -117,8 +117,9 @@ supervisor_chain = (
     | llm
 )
 
-def supervisor_node(state: MarketingState):
-    result = supervisor_chain.invoke(state)
+async def supervisor_node(state: MarketingState):
+    # Optimization: Use ainvoke to avoid blocking the event loop during LLM calls
+    result = await supervisor_chain.ainvoke(state)
     next_agent = result.content.strip()
     
     # Simple parsing to clearer logic
