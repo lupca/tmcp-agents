@@ -72,6 +72,11 @@ async def platform_variants_event_generator(
 
             # LLM streaming tokens
             elif event_type == "on_chat_model_stream":
+                metadata = event.get("metadata", {})
+                # Suppress streaming for Generator node because parallel execution causes interleaved output
+                if metadata.get("langgraph_node") == "Generator":
+                    continue
+
                 chunk = event["data"]["chunk"]
                 if chunk.content:
                     yield sse_event("chunk", content=chunk.content)
