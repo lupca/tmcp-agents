@@ -15,5 +15,6 @@ python-dotenv
 langsmith
 pytest
 pytest-asyncio
+pytest-cov
 fastapi
 uvicorn

@@ -3,12 +3,18 @@ from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-from app.models.schemas import ChatRequest, WorksheetRequest, BrandIdentityRequest, CustomerProfileRequest, MarketingStrategyRequest
+from app.models.schemas import (
+    ChatRequest, WorksheetRequest, BrandIdentityRequest, 
+    CustomerProfileRequest, MarketingStrategyRequest,
+    MasterContentGenerationRequest, PlatformVariantGenerationRequest
+)
 from app.services.chat import chat_event_generator
 from app.services.worksheet import worksheet_event_generator
 from app.services.brand import brand_identity_event_generator
 from app.services.customer import customer_profile_event_generator
 from app.services.strategy import marketing_strategy_event_generator
+from app.services.master_content import master_content_event_generator
+from app.services.variant_generator import platform_variants_event_generator
 
 # Load environment variables
 load_dotenv()
@@ -74,6 +80,31 @@ async def generate_marketing_strategy(request: MarketingStrategyRequest):
             customer_profile_id=request.customerProfileId,
             goal=request.goal,
             language=request.language,
+        ),
+        media_type="text/event-stream"
+    )
+
+
+@app.post("/generate-master-content")
+async def generate_master_content(request: MasterContentGenerationRequest):
+    return StreamingResponse(
+        master_content_event_generator(
+            campaign_id=request.campaignId,
+            workspace_id=request.workspaceId,
+            language=request.languagePreference,
+        ),
+        media_type="text/event-stream"
+    )
+
+
+@app.post("/generate-platform-variants/{master_content_id}")
+async def generate_platform_variants(master_content_id: str, request: PlatformVariantGenerationRequest):
+    return StreamingResponse(
+        platform_variants_event_generator(
+            master_content_id=master_content_id,
+            platforms=request.platforms,
+            workspace_id=request.workspaceId,
+            language=request.languagePreference,
         ),
         media_type="text/event-stream"
     )
