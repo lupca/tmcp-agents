@@ -256,53 +256,10 @@ async def saver_node(state: MasterContentState) -> Dict[str, Any]:
     if not generated_content or generated_content.get("_parse_error"):
         return {"messages": [HumanMessage(content="Nothing to save — generation failed.")]}
 
-    workspace_id = state["workspace_id"]
-    campaign_id = state["campaign_id"]
-    language = state.get("language", "Vietnamese")
-
-    # Auto-save disabled - return generated content for manual review
-    # record_data = {
-    #     "workspace_id": workspace_id,
-    #     "campaign_id": campaign_id,
-    #     "core_message": generated_content.get("core_message", ""),
-    #     "approval_status": "pending",
-    #     "metadata": json.dumps({
-    #         "tone_markers": generated_content.get("tone_markers", []),
-    #         "suggested_hashtags": generated_content.get("suggested_hashtags", []),
-    #         "key_benefits": generated_content.get("key_benefits", []),
-    #         "call_to_action": generated_content.get("call_to_action", ""),
-    #         "confidence_score": generated_content.get("confidence_score", 0),
-    #         "generation_language": language,
-    #     }),
-    # }
-
-    # try:
-    #     result = await execute_mcp_tool(
-    #         "create_record",
-    #         {"collection": "master_contents", "data": record_data},
-    #     )
-    #     created = json.loads(result.content[0].text)
-    #     record_id = created.get("id", "unknown")
-    #     return {
-    #         "messages": [
-    #             HumanMessage(
-    #                 content=f"Master content saved successfully. Record ID: {record_id}"
-    #             )
-    #         ]
-    #     }
-    # except Exception as e:
-    #     logger.error(f"Failed to save master content: {e}")
-    #     return {
-    #         "messages": [
-    #             HumanMessage(content=f"ERROR: Failed to save master content: {e}")
-    #         ]
-    #     }
-    
-    # Return generated content for manual review
     return {
         "messages": [
             HumanMessage(
-                content=f"Master content generated successfully. Ready for review."
+                content="Master content generated successfully. Ready for review."
             )
         ]
     }

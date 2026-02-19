@@ -38,6 +38,6 @@ class MasterContentGenerationRequest(BaseModel):
 
 
 class PlatformVariantGenerationRequest(BaseModel):
-    platforms: list[str] = Field(..., min_items=1, description="List of platform codes (e.g., 'facebook', 'instagram', 'linkedin', 'twitter', 'tiktok', 'youtube', 'blog', 'email')")
+    platforms: list[str] = Field(..., min_length=1, description="List of platform codes (e.g., 'facebook', 'instagram', 'linkedin', 'twitter', 'tiktok', 'youtube', 'blog', 'email')")
     languagePreference: str = "Vietnamese"
     workspaceId: str = Field(..., min_length=1, description="Workspace ID for context isolation")

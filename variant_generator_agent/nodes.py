@@ -281,10 +281,6 @@ async def saver_node(state: VariantGeneratorState) -> Dict[str, Any]:
     if not generated_variants:
         return {"messages": [HumanMessage(content="Nothing to save — no variants generated.")]}
 
-    workspace_id = state["workspace_id"]
-    master_content_id = state["master_content_id"]
-    language = state.get("language", "Vietnamese")
-
     # Inherit media from master content
     mc = state.get("context_data", {}).get("masterContent", {})
     media_ids = mc.get("primaryMediaIds", [])
@@ -294,54 +290,9 @@ async def saver_node(state: VariantGeneratorState) -> Dict[str, Any]:
         except (json.JSONDecodeError, TypeError):
             media_ids = []
 
-    created_ids = []
-
-    for variant in generated_variants:
-        platform = variant.get("_platform", "unknown")
-        record_data = {
-            "workspace_id": workspace_id,
-            "master_content_id": master_content_id,
-            "platform": platform,
-            "adapted_copy": variant.get("adapted_copy", ""),
-            "platformMediaIds": media_ids,
-            "publish_status": "draft",
-            "metadata": json.dumps({
-                "seoTitle": variant.get("seoTitle", ""),
-                "seoDescription": variant.get("seoDescription", ""),
-                "seoKeywords": variant.get("seoKeywords", []),
-                "hashtags": variant.get("hashtags", []),
-                "summary": variant.get("summary", ""),
-                "callToAction": variant.get("callToAction", ""),
-                "platform_tips": variant.get("platform_tips", ""),
-                "aiPrompt_used": variant.get("aiPrompt_used", ""),
-                "confidence_score": variant.get("confidence_score", 0),
-                "character_count": variant.get("character_count", 0),
-                "optimization_notes": variant.get("optimization_notes", ""),
-                "generated_at": datetime.now().isoformat(),
-                "generation_language": language,
-            }),
-        }
-
-        # Auto-save disabled - skip database persistence
-        # try:
-        #     result = await execute_mcp_tool(
-        #         "create_record",
-        #         {"collection": "platform_variants", "data": record_data},
-        #     )
-        #     created = json.loads(result.content[0].text)
-        #     created_ids.append({"platform": platform, "id": created.get("id")})
-        # except Exception as e:
-        #     logger.error(f"Failed to save {platform} variant: {e}")
-        #     return {
-        #         "messages": [
-        #             HumanMessage(
-        #                 content=f"ERROR: Failed to save {platform} variant: {e}. Aborting."
-        #             )
-        #         ]
-        #     }
-
-    # Return generated variants for manual review
-    # summary = ", ".join(f"{v['platform']}={v['id']}" for v in created_ids)
+    # Dead persistence logic removed: created_ids and record_data were unused
+    # If auto-save is needed in the future, reintroduce with a feature flag and enable the save logic.
+        
     return {
         "messages": [
             HumanMessage(
