@@ -12,11 +12,10 @@ from .nodes import (
 """
 Variant Generator Agent Graph
 
-Flow:
-  START → Retriever → Evaluator ─┬─ Generator → Evaluator ─┬─ Saver → END
-                                  │                          │
-                                  └── FINISH (error) → END   ├── RETRY → Generator
-                                                             └── Next platform → Generator
+Flow (Parallelized):
+  START → Retriever → Evaluator (Context Check) ─┬─ Generator (Parallel) → Saver → END
+                                                 │
+                                                 └── FINISH (Error) → END
 """
 
 # 1. Create the graph
@@ -36,26 +35,21 @@ workflow.add_edge(START, "Retriever")
 # Retriever → Evaluator (evaluate context)
 workflow.add_edge("Retriever", "Evaluator")
 
-# Generator → Evaluator (evaluate generated variant)
-workflow.add_edge("Generator", "Evaluator")
+# Generator → Saver (All variants generated in parallel, move to save)
+workflow.add_edge("Generator", "Saver")
 
 # Saver → END
 workflow.add_edge("Saver", END)
 
 
-# Conditional edges from Evaluator
+# Conditional edges from Evaluator (Context Check)
 def determine_next_node(state: VariantGeneratorState):
     next_node = state.get("next_node", "FINISH")
-
-    if next_node == "FINISH":
-        generated_variants = state.get("generated_variants", [])
-        if generated_variants:
-            return "Saver"
-        return END
 
     if next_node == "Generator":
         return "Generator"
 
+    # If context missing, finish
     return END
 
 
@@ -64,7 +58,6 @@ workflow.add_conditional_edges(
     determine_next_node,
     {
         "Generator": "Generator",
-        "Saver": "Saver",
         END: END,
     },
 )
