@@ -5,7 +5,8 @@ from typing import Dict, Any
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.core.llm_factory import get_ollama_llm
-from app.tools.mcp_bridge import execute_mcp_tool
+from app.tools.mcp_bridge import execute_mcp_tool, parse_mcp_result
+from app.services.context_fetcher import fetch_campaign_context
 from app.utils.llm import parse_json_response
 from app.prompts import MASTER_CONTENT_GENERATOR_PROMPT
 
@@ -16,18 +17,6 @@ logger = logging.getLogger(__name__)
 # Initialize LLM
 llm = get_ollama_llm(temperature=0.7)
 
-
-def _parse_mcp_result(result) -> tuple[dict | None, str | None]:
-    """Parse MCP tool result. Returns (data, error_msg)."""
-    text = result.content[0].text
-    if text.startswith("Error:"):
-        return None, text
-    try:
-        return json.loads(text), None
-    except (json.JSONDecodeError, ValueError) as e:
-        return None, f"JSON parse error: {e}. Raw: {text[:200]}"
-
-
 async def retriever_node(state: MasterContentState) -> Dict[str, Any]:
     """
     Retriever (R): Gathers full context via MCP tools.
@@ -36,80 +25,7 @@ async def retriever_node(state: MasterContentState) -> Dict[str, Any]:
     print("--- [R] Master Content Retriever Node ---")
 
     campaign_id = state["campaign_id"]
-    context: Dict[str, Any] = {}
-    errors: Dict[str, str] = {}
-
-    # 1. Fetch Campaign
-    try:
-        result = await execute_mcp_tool(
-            "get_record",
-            {"collection": "marketing_campaigns", "record_id": campaign_id},
-        )
-        campaign, err = _parse_mcp_result(result)
-        if campaign:
-            context["campaign"] = campaign
-        else:
-            logger.error(f"Campaign fetch error: {err}")
-            context["campaign"] = {}
-            errors["campaign"] = err or "Unknown error"
-    except Exception as e:
-        logger.error(f"Failed to fetch campaign: {e}")
-        context["campaign"] = {}
-        errors["campaign"] = str(e)
-
-    # 2. Fetch Worksheet
-    worksheet_id = context.get("campaign", {}).get("worksheet_id")
-    if worksheet_id:
-        try:
-            result = await execute_mcp_tool(
-                "get_record",
-                {"collection": "worksheets", "record_id": worksheet_id},
-            )
-            ws, err = _parse_mcp_result(result)
-            context["worksheet"] = ws or {}
-            if err:
-                errors["worksheet"] = err
-        except Exception as e:
-            logger.warning(f"Failed to fetch worksheet: {e}")
-            context["worksheet"] = {}
-    else:
-        context["worksheet"] = {}
-
-    # 3. Fetch Brand Identity
-    brand_id = context.get("campaign", {}).get("brand_id")
-    if brand_id:
-        try:
-            result = await execute_mcp_tool(
-                "get_record",
-                {"collection": "brand_identities", "record_id": brand_id},
-            )
-            brand, err = _parse_mcp_result(result)
-            context["brandIdentity"] = brand or {}
-            if err:
-                errors["brandIdentity"] = err
-        except Exception as e:
-            logger.warning(f"Failed to fetch brand identity: {e}")
-            context["brandIdentity"] = {}
-    else:
-        context["brandIdentity"] = {}
-
-    # 4. Fetch Customer Profile
-    persona_id = context.get("campaign", {}).get("persona_id")
-    if persona_id:
-        try:
-            result = await execute_mcp_tool(
-                "get_record",
-                {"collection": "ideal_customer_profiles", "record_id": persona_id},
-            )
-            profile, err = _parse_mcp_result(result)
-            context["customerProfile"] = profile or {}
-            if err:
-                errors["customerProfile"] = err
-        except Exception as e:
-            logger.warning(f"Failed to fetch customer profile: {e}")
-            context["customerProfile"] = {}
-    else:
-        context["customerProfile"] = {}
+    context, errors = await fetch_campaign_context(campaign_id)
 
     # Store errors in context for the evaluator
     if errors:
@@ -127,6 +43,7 @@ async def generator_node(state: MasterContentState) -> Dict[str, Any]:
     context = state.get("context_data", {})
     language = state.get("language", "Vietnamese")
     feedback = state.get("feedback", "")
+    angle_context = state.get("angle_context") or {}
 
     campaign = context.get("campaign", {})
     brand = context.get("brandIdentity", {})
@@ -153,6 +70,22 @@ async def generator_node(state: MasterContentState) -> Dict[str, Any]:
         persona_pain_points=safe_join(persona.get("pain_points_and_challenges", persona.get("painPointsAndChallenges", []))),
         language=language,
     )
+
+    if angle_context:
+        angle_name = angle_context.get("angle_name", "")
+        funnel_stage = angle_context.get("funnel_stage", "")
+        psychological_angle = angle_context.get("psychological_angle", "")
+        key_message_variation = angle_context.get("key_message_variation", "")
+        brief = angle_context.get("brief", "")
+        prompt_text += (
+            "\n\nAngle Context:\n"
+            f"- Angle Name: {angle_name}\n"
+            f"- Funnel Stage: {funnel_stage}\n"
+            f"- Psychological Angle: {psychological_angle}\n"
+            f"- Key Message Variation: {key_message_variation}\n"
+            f"- Brief: {brief}\n"
+            "\nUse this angle to diversify content." 
+        )
 
     # If there's feedback from a previous evaluation, append it
     if feedback and "RETRY" in feedback.upper():

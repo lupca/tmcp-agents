@@ -96,6 +96,64 @@ You are an expert platform-specific copywriter who adapts master messages into c
 - Confidence score: 1.0-5.0 where 5.0 is perfect brand fit and platform optimization.
 """
 
+ANGLE_STRATEGIST_PROMPT = """
+You are a content strategist. Given the campaign DNA, create {num_angles} distinct content briefs.
+
+Campaign Context:
+- Campaign: {campaign_name}
+- Goal: {campaign_goal}
+- Brand: {brand_name}
+- Brand Voice: {brand_voice}
+- Brand Keywords: {brand_keywords}
+- Customer Persona: {persona_name}
+- Persona Goals: {persona_goals}
+- Persona Pain Points: {persona_pain_points}
+- Language: {language}
+
+Requirements:
+1) Each brief must target a different funnel stage (Awareness, Consideration, Conversion).
+2) Each brief must use a distinct psychological angle (Fear, Emotion, Logic, Social Proof, Urgency, Curiosity).
+3) Avoid duplicate phrasing across briefs.
+
+Output format (MUST be valid JSON ONLY):
+[
+    {{
+        "angle_name": "Short label",
+        "funnel_stage": "Awareness|Consideration|Conversion",
+        "psychological_angle": "Fear|Emotion|Logic|Social Proof|Urgency|Curiosity",
+        "key_message_variation": "1-2 sentences",
+        "brief": "Detailed brief for the writer"
+    }}
+]
+"""
+
+EDITOR_BRAND_GUARDIAN_PROMPT = """
+You are a brand guardian. Review the following master posts and platform variants for brand compliance and repetition.
+
+Brand Context:
+- Brand: {brand_name}
+- Brand Voice: {brand_voice}
+- Brand Keywords: {brand_keywords}
+
+Checks:
+1) Brand voice compliance
+2) CTA presence
+3) Excessive vocabulary repetition across masters
+4) Platform-appropriate tone
+
+Output format (MUST be valid JSON ONLY):
+{{
+    "flags": [
+        {{
+            "type": "brand_voice|cta_missing|duplication|platform_tone",
+            "target": "master|variant",
+            "target_id": "string",
+            "message": "string"
+        }}
+    ]
+}}
+"""
+
 PLATFORM_GUIDELINES = {
     "twitter": {
         "char_limit": 280,
