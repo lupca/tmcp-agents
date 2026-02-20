@@ -14,6 +14,7 @@ class MasterContentState(TypedDict):
     campaign_id: str
     workspace_id: str
     language: str
+    angle_context: Optional[Dict[str, Any]]
     
     # Context fetched by Retriever
     context_data: Dict[str, Any]

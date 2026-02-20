@@ -1,12 +1,26 @@
 import os
 import asyncio
-from typing import Any, Dict, List, Optional
+import json
+from typing import Any, Dict, List, Optional, Tuple
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from contextlib import AsyncExitStack
 
 # Helper to run a tool via SSE
 from mcp.client.sse import sse_client
+
+def parse_mcp_result(result: Any) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """Parse MCP tool result. Returns (data, error_msg)."""
+    if not result or not hasattr(result, "content") or not result.content:
+        return None, "Empty or invalid result from MCP"
+        
+    text = result.content[0].text
+    if text.startswith("Error:"):
+        return None, text
+    try:
+        return json.loads(text), None
+    except (json.JSONDecodeError, ValueError) as e:
+        return None, f"JSON parse error: {e}. Raw: {text[:200]}"
 
 async def execute_mcp_tool(tool_name: str, arguments: dict) -> Any:
     # URL of the standalone MCP server

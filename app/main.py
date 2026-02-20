@@ -6,7 +6,8 @@ from dotenv import load_dotenv
 from app.models.schemas import (
     ChatRequest, WorksheetRequest, BrandIdentityRequest, 
     CustomerProfileRequest, MarketingStrategyRequest,
-    MasterContentGenerationRequest, PlatformVariantGenerationRequest
+    MasterContentGenerationRequest, PlatformVariantGenerationRequest,
+    BatchGenerationRequest
 )
 from app.services.chat import chat_event_generator
 from app.services.worksheet import worksheet_event_generator
@@ -15,6 +16,7 @@ from app.services.customer import customer_profile_event_generator
 from app.services.strategy import marketing_strategy_event_generator
 from app.services.master_content import master_content_event_generator
 from app.services.variant_generator import platform_variants_event_generator
+from app.services.batch_generator import batch_generate_event_stream
 
 # Load environment variables
 load_dotenv()
@@ -105,6 +107,20 @@ async def generate_platform_variants(master_content_id: str, request: PlatformVa
             platforms=request.platforms,
             workspace_id=request.workspaceId,
             language=request.languagePreference,
+        ),
+        media_type="text/event-stream"
+    )
+
+
+@app.post("/batch-generate-posts")
+async def batch_generate_posts(request: BatchGenerationRequest):
+    return StreamingResponse(
+        batch_generate_event_stream(
+            campaign_id=request.campaignId,
+            workspace_id=request.workspaceId,
+            language=request.language,
+            platforms=request.platforms,
+            num_masters=request.numMasters,
         ),
         media_type="text/event-stream"
     )

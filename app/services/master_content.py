@@ -26,6 +26,7 @@ async def master_content_event_generator(
         "campaign_id": campaign_id,
         "workspace_id": workspace_id,
         "language": language,
+        "angle_context": None,
         "context_data": {},
         "generated_content": None,
         "feedback": "",

@@ -6,7 +6,8 @@ from datetime import datetime
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.core.llm_factory import get_ollama_llm
-from app.tools.mcp_bridge import execute_mcp_tool
+from app.tools.mcp_bridge import execute_mcp_tool, parse_mcp_result
+from app.services.context_fetcher import fetch_campaign_context
 from app.utils.llm import parse_json_response
 from app.prompts import PLATFORM_VARIANT_GENERATOR_PROMPT, PLATFORM_GUIDELINES
 
@@ -15,18 +16,6 @@ from .state import VariantGeneratorState
 logger = logging.getLogger(__name__)
 
 llm = get_ollama_llm(temperature=0.7)
-
-
-def _parse_mcp_result(result) -> tuple[dict | None, str | None]:
-    """Parse MCP tool result. Returns (data, error_msg)."""
-    text = result.content[0].text
-    if text.startswith("Error:"):
-        return None, text
-    try:
-        return json.loads(text), None
-    except (json.JSONDecodeError, ValueError) as e:
-        return None, f"JSON parse error: {e}. Raw: {text[:200]}"
-
 
 async def retriever_node(state: VariantGeneratorState) -> Dict[str, Any]:
     """
@@ -44,7 +33,7 @@ async def retriever_node(state: VariantGeneratorState) -> Dict[str, Any]:
             "get_record",
             {"collection": "master_contents", "record_id": master_content_id},
         )
-        mc, err = _parse_mcp_result(result)
+        mc, err = parse_mcp_result(result)
         if mc:
             context["masterContent"] = mc
         else:
@@ -56,58 +45,15 @@ async def retriever_node(state: VariantGeneratorState) -> Dict[str, Any]:
         context["masterContent"] = {}
         errors["masterContent"] = str(e)
 
-    # 2. Fetch Campaign
+    # 2. Fetch Campaign Context
     campaign_id = context.get("masterContent", {}).get("campaign_id")
     if campaign_id:
-        try:
-            result = await execute_mcp_tool(
-                "get_record",
-                {"collection": "marketing_campaigns", "record_id": campaign_id},
-            )
-            data, err = _parse_mcp_result(result)
-            context["campaign"] = data or {}
-            if err:
-                errors["campaign"] = err
-        except Exception as e:
-            logger.warning(f"Failed to fetch campaign: {e}")
-            context["campaign"] = {}
+        campaign_context, campaign_errors = await fetch_campaign_context(campaign_id)
+        context.update(campaign_context)
+        errors.update(campaign_errors)
     else:
         context["campaign"] = {}
-
-    # 3. Fetch Brand Identity
-    brand_id = context.get("campaign", {}).get("brand_id")
-    if brand_id:
-        try:
-            result = await execute_mcp_tool(
-                "get_record",
-                {"collection": "brand_identities", "record_id": brand_id},
-            )
-            data, err = _parse_mcp_result(result)
-            context["brandIdentity"] = data or {}
-            if err:
-                errors["brandIdentity"] = err
-        except Exception as e:
-            logger.warning(f"Failed to fetch brand identity: {e}")
-            context["brandIdentity"] = {}
-    else:
         context["brandIdentity"] = {}
-
-    # 4. Fetch Customer Profile
-    persona_id = context.get("campaign", {}).get("persona_id")
-    if persona_id:
-        try:
-            result = await execute_mcp_tool(
-                "get_record",
-                {"collection": "ideal_customer_profiles", "record_id": persona_id},
-            )
-            data, err = _parse_mcp_result(result)
-            context["customerProfile"] = data or {}
-            if err:
-                errors["customerProfile"] = err
-        except Exception as e:
-            logger.warning(f"Failed to fetch customer profile: {e}")
-            context["customerProfile"] = {}
-    else:
         context["customerProfile"] = {}
 
     if errors:
@@ -148,7 +94,7 @@ async def generator_node(state: VariantGeneratorState) -> Dict[str, Any]:
             metadata = {}
 
     core_message = mc.get("core_message", "")
-    extended_message = mc.get("extended_message", "")
+    extended_message = mc.get("extended_message", "") or metadata.get("extended_message", "")
     tone_markers = metadata.get("tone_markers", [])
     call_to_action = metadata.get("call_to_action", "")
 
