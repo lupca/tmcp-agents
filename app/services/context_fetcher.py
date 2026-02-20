@@ -9,9 +9,10 @@ async def fetch_campaign_context(campaign_id: str) -> Tuple[Dict[str, Any], Dict
     """
     Fetches the full context for a campaign including:
     - Campaign details
-    - Worksheet
-    - Brand Identity
-    - Ideal Customer Profile
+    - Product (via product_id on campaign)
+    - Brand Identity (via product_id.brand_id or worksheet.brandRefs)
+    - Worksheet (via worksheet_id on campaign)
+    - Ideal Customer Profile (via worksheet.customerRefs)
     
     Returns:
         Tuple of (context_data, errors)
@@ -19,11 +20,15 @@ async def fetch_campaign_context(campaign_id: str) -> Tuple[Dict[str, Any], Dict
     context: Dict[str, Any] = {}
     errors: Dict[str, str] = {}
 
-    # 1. Fetch Campaign
+    # 1. Fetch Campaign with expand to get product->brand chain
     try:
         result = await execute_mcp_tool(
             "get_record",
-            {"collection": "marketing_campaigns", "record_id": campaign_id},
+            {
+                "collection": "marketing_campaigns",
+                "record_id": campaign_id,
+                "expand": "product_id,product_id.brand_id,worksheet_id",
+            },
         )
         campaign, err = parse_mcp_result(result)
         if campaign:
@@ -37,51 +42,100 @@ async def fetch_campaign_context(campaign_id: str) -> Tuple[Dict[str, Any], Dict
         context["campaign"] = {}
         errors["campaign"] = str(e)
 
-    # 2. Fetch Worksheet
-    worksheet_id = context.get("campaign", {}).get("worksheet_id")
-    if worksheet_id:
-        try:
-            result = await execute_mcp_tool(
-                "get_record",
-                {"collection": "worksheets", "record_id": worksheet_id},
-            )
-            ws, err = parse_mcp_result(result)
-            context["worksheet"] = ws or {}
-            if err:
-                errors["worksheet"] = err
-        except Exception as e:
-            logger.warning(f"Failed to fetch worksheet: {e}")
+    campaign_data = context.get("campaign", {})
+    expand = campaign_data.get("expand", {})
+
+    # 2. Extract Worksheet from expand or fetch separately
+    worksheet_data = expand.get("worksheet_id")
+    if worksheet_data:
+        context["worksheet"] = worksheet_data
+    else:
+        worksheet_id = campaign_data.get("worksheet_id")
+        if worksheet_id:
+            try:
+                result = await execute_mcp_tool(
+                    "get_record",
+                    {"collection": "worksheets", "record_id": worksheet_id},
+                )
+                ws, err = parse_mcp_result(result)
+                context["worksheet"] = ws or {}
+                if err:
+                    errors["worksheet"] = err
+            except Exception as e:
+                logger.warning(f"Failed to fetch worksheet: {e}")
+                context["worksheet"] = {}
+                errors["worksheet"] = str(e)
+        else:
             context["worksheet"] = {}
-            errors["worksheet"] = str(e)
-    else:
-        context["worksheet"] = {}
 
-    # 3. Fetch Brand Identity
-    brand_id = context.get("campaign", {}).get("brand_id")
-    if brand_id:
-        try:
-            result = await execute_mcp_tool(
-                "get_record",
-                {"collection": "brand_identities", "record_id": brand_id},
-            )
-            brand, err = parse_mcp_result(result)
-            context["brandIdentity"] = brand or {}
-            if err:
-                errors["brandIdentity"] = err
-        except Exception as e:
-            logger.warning(f"Failed to fetch brand identity: {e}")
+    # 3. Extract Product from expand
+    product_data = expand.get("product_id")
+    if product_data:
+        context["product"] = product_data
+    else:
+        product_id = campaign_data.get("product_id")
+        if product_id:
+            try:
+                result = await execute_mcp_tool(
+                    "get_record",
+                    {
+                        "collection": "products_services",
+                        "record_id": product_id,
+                        "expand": "brand_id",
+                    },
+                )
+                prod, err = parse_mcp_result(result)
+                context["product"] = prod or {}
+                if err:
+                    errors["product"] = err
+            except Exception as e:
+                logger.warning(f"Failed to fetch product: {e}")
+                context["product"] = {}
+                errors["product"] = str(e)
+        else:
+            context["product"] = {}
+
+    # 4. Extract Brand Identity: prefer product->brand expand, fallback to worksheet.brandRefs
+    brand_data = None
+    # Try product.expand.brand_id first
+    product = context.get("product", {})
+    if product:
+        brand_data = product.get("expand", {}).get("brand_id")
+    # Also try campaign.expand.product_id.expand.brand_id
+    if not brand_data and expand.get("product_id"):
+        brand_data = expand["product_id"].get("expand", {}).get("brand_id")
+
+    if brand_data:
+        context["brandIdentity"] = brand_data
+    else:
+        # Fallback: fetch first brandRef from worksheet
+        worksheet = context.get("worksheet", {})
+        brand_refs = worksheet.get("brandRefs", [])
+        if brand_refs and len(brand_refs) > 0:
+            try:
+                result = await execute_mcp_tool(
+                    "get_record",
+                    {"collection": "brand_identities", "record_id": brand_refs[0]},
+                )
+                brand, err = parse_mcp_result(result)
+                context["brandIdentity"] = brand or {}
+                if err:
+                    errors["brandIdentity"] = err
+            except Exception as e:
+                logger.warning(f"Failed to fetch brand identity: {e}")
+                context["brandIdentity"] = {}
+                errors["brandIdentity"] = str(e)
+        else:
             context["brandIdentity"] = {}
-            errors["brandIdentity"] = str(e)
-    else:
-        context["brandIdentity"] = {}
 
-    # 4. Fetch Customer Profile
-    persona_id = context.get("campaign", {}).get("persona_id")
-    if persona_id:
+    # 5. Fetch Customer Profile from worksheet.customerRefs
+    worksheet = context.get("worksheet", {})
+    customer_refs = worksheet.get("customerRefs", [])
+    if customer_refs and len(customer_refs) > 0:
         try:
             result = await execute_mcp_tool(
                 "get_record",
-                {"collection": "ideal_customer_profiles", "record_id": persona_id},
+                {"collection": "customer_personas", "record_id": customer_refs[0]},
             )
             profile, err = parse_mcp_result(result)
             context["customerProfile"] = profile or {}

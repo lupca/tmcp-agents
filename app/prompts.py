@@ -97,7 +97,7 @@ You are an expert platform-specific copywriter who adapts master messages into c
 """
 
 ANGLE_STRATEGIST_PROMPT = """
-You are a content strategist. Given the campaign DNA, create {num_angles} distinct content briefs.
+You are a content strategist. Given the campaign DNA, create {num_angles} distinct content briefs for the funnel stage: {funnel_stage}.
 
 Campaign Context:
 - Campaign: {campaign_name}
@@ -105,24 +105,31 @@ Campaign Context:
 - Brand: {brand_name}
 - Brand Voice: {brand_voice}
 - Brand Keywords: {brand_keywords}
+- Product/Service: {product_name}
+- Product USP: {product_usp}
+- Product Features: {product_features}
+- Product Benefits: {product_benefits}
 - Customer Persona: {persona_name}
 - Persona Goals: {persona_goals}
 - Persona Pain Points: {persona_pain_points}
 - Language: {language}
 
 Requirements:
-1) Each brief must target a different funnel stage (Awareness, Consideration, Conversion).
-2) Each brief must use a distinct psychological angle (Fear, Emotion, Logic, Social Proof, Urgency, Curiosity).
+1) ALL briefs must target the funnel stage: {funnel_stage}.
+2) Each brief must use a distinct psychological angle from: Fear, Emotion, Logic, Social Proof, Urgency, Curiosity.
 3) Avoid duplicate phrasing across briefs.
+4) Each brief must deeply connect the product/service USP with the customer persona's pain points.
 
 Output format (MUST be valid JSON ONLY):
 [
     {{
-        "angle_name": "Short label",
-        "funnel_stage": "Awareness|Consideration|Conversion",
+        "angle_name": "Short label (e.g., Risk Warning Angle)",
+        "funnel_stage": "{funnel_stage}",
         "psychological_angle": "Fear|Emotion|Logic|Social Proof|Urgency|Curiosity",
-        "key_message_variation": "1-2 sentences",
-        "brief": "Detailed brief for the writer"
+        "pain_point_focus": "One sentence describing the exact pain point or desire this brief addresses",
+        "key_message_variation": "Core message adapted for this angle (1-2 sentences)",
+        "call_to_action_direction": "Specific action (e.g., Download Ebook, Fill Form, Buy Now)",
+        "brief": "Detailed 3-part outline (Opening - Body - Closing) for the writer"
     }}
 ]
 """

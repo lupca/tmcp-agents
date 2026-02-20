@@ -49,3 +49,10 @@ class BatchGenerationRequest(BaseModel):
     platforms: list[str] = Field(..., min_length=1, description="List of platform codes (e.g., 'facebook', 'instagram', 'linkedin', 'twitter', 'tiktok', 'youtube', 'blog', 'email')")
     numMasters: int = Field(1, ge=1, le=10, description="Number of master posts to generate")
     workspaceId: str = Field(..., min_length=1, description="Workspace ID for context isolation")
+
+
+class ContentBriefsGenerationRequest(BaseModel):
+    campaignId: str = Field(..., min_length=1, description="ID of the marketing campaign")
+    workspaceId: str = Field(..., min_length=1, description="Workspace ID for context isolation")
+    language: str = "Vietnamese"
+    anglesPerStage: int = Field(6, ge=1, le=10, description="Number of angles to generate per funnel stage")

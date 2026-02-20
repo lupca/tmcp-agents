@@ -7,7 +7,7 @@ from app.models.schemas import (
     ChatRequest, WorksheetRequest, BrandIdentityRequest, 
     CustomerProfileRequest, MarketingStrategyRequest,
     MasterContentGenerationRequest, PlatformVariantGenerationRequest,
-    BatchGenerationRequest
+    BatchGenerationRequest, ContentBriefsGenerationRequest
 )
 from app.services.chat import chat_event_generator
 from app.services.worksheet import worksheet_event_generator
@@ -17,6 +17,7 @@ from app.services.strategy import marketing_strategy_event_generator
 from app.services.master_content import master_content_event_generator
 from app.services.variant_generator import platform_variants_event_generator
 from app.services.batch_generator import batch_generate_event_stream
+from app.services.content_briefs import content_briefs_event_generator
 
 # Load environment variables
 load_dotenv()
@@ -121,6 +122,19 @@ async def batch_generate_posts(request: BatchGenerationRequest):
             language=request.language,
             platforms=request.platforms,
             num_masters=request.numMasters,
+        ),
+        media_type="text/event-stream"
+    )
+
+
+@app.post("/generate-content-briefs")
+async def generate_content_briefs(request: ContentBriefsGenerationRequest):
+    return StreamingResponse(
+        content_briefs_event_generator(
+            campaign_id=request.campaignId,
+            workspace_id=request.workspaceId,
+            language=request.language,
+            angles_per_stage=request.anglesPerStage,
         ),
         media_type="text/event-stream"
     )

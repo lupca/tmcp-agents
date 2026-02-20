@@ -39,6 +39,7 @@ async def generator_node(state: AngleStrategistState) -> Dict[str, Any]:
     campaign = context.get("campaign", {})
     brand = context.get("brandIdentity", {})
     persona = context.get("customerProfile", {})
+    product = context.get("product", {})
 
     def safe_join(val):
         if isinstance(val, list):
@@ -48,17 +49,26 @@ async def generator_node(state: AngleStrategistState) -> Dict[str, Any]:
     brand_voice_data = brand.get("voice_and_tone", brand.get("voiceAndTone", {}))
     brand_voice = str(brand_voice_data) if brand_voice_data else ""
 
+    # Get strategy from kpi_targets if available
+    kpi_targets = campaign.get("kpi_targets", {})
+    strategy = kpi_targets.get("strategy", {}) if isinstance(kpi_targets, dict) else {}
+
     prompt_text = ANGLE_STRATEGIST_PROMPT.format(
         campaign_name=campaign.get("name", "Unknown Campaign"),
-        campaign_goal=campaign.get("goal", ""),
+        campaign_goal=strategy.get("goal", campaign.get("goal", "")),
         brand_name=brand.get("brand_name", brand.get("brandName", "Brand")),
         brand_voice=brand_voice,
         brand_keywords=safe_join(brand.get("keywords", [])),
+        product_name=product.get("name", "N/A"),
+        product_usp=product.get("usp", "N/A"),
+        product_features=safe_join(product.get("key_features", [])),
+        product_benefits=safe_join(product.get("key_benefits", [])),
         persona_name=persona.get("persona_name", persona.get("personaName", "Customer")),
         persona_goals=safe_join(persona.get("goals_and_motivations", persona.get("goalsAndMotivations", []))),
         persona_pain_points=safe_join(persona.get("pain_points_and_challenges", persona.get("painPointsAndChallenges", []))),
         language=language,
         num_angles=num_angles,
+        funnel_stage=state.get("funnel_stage", "Awareness"),
     )
 
     if feedback and "RETRY" in feedback.upper():

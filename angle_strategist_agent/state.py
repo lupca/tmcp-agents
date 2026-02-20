@@ -9,6 +9,7 @@ class AngleStrategistState(TypedDict):
     workspace_id: str
     language: str
     num_angles: int
+    funnel_stage: str
 
     context_data: Dict[str, Any]
     generated_angles: Optional[List[Dict[str, Any]]]
