@@ -22,37 +22,46 @@ async def marketing_strategy_event_generator(
     Fetches Worksheet + Brand + ICP via MCP, then streams LLM output.
     """
     try:
-        # --- Step 1: Fetch all contexts in parallel (or sequential for better status updates) ---
-        
-        # 1. Fetch Worksheet
+        # --- Step 1: Fetch all contexts in parallel ---
+
+        async def fetch_worksheet():
+            try:
+                ws_result = await execute_mcp_tool("get_record", {"collection": "worksheets", "record_id": worksheet_id})
+                ws_data_raw = ws_result.content[0].text
+                ws_parsed = json.loads(ws_data_raw)
+                return ws_parsed.get("content", "")
+            except Exception as e:
+                raise Exception(f"Failed to fetch worksheet: {str(e)}")
+
+        async def fetch_brand():
+            try:
+                brand_result = await execute_mcp_tool("get_record", {"collection": "brand_identities", "record_id": brand_identity_id})
+                brand_data_raw = brand_result.content[0].text
+                return json.loads(brand_data_raw)
+            except Exception as e:
+                raise Exception(f"Failed to fetch brand identity: {str(e)}")
+
+        async def fetch_icp():
+            try:
+                icp_result = await execute_mcp_tool("get_record", {"collection": "ideal_customer_profiles", "record_id": customer_profile_id})
+                icp_data_raw = icp_result.content[0].text
+                return json.loads(icp_data_raw)
+            except Exception as e:
+                raise Exception(f"Failed to fetch customer profile: {str(e)}")
+
+        # Emit statuses rapidly to indicate progress
         yield sse_event("status", status="fetching_worksheet", agent="MarketingStrategist")
-        try:
-            ws_result = await execute_mcp_tool("get_record", {"collection": "worksheets", "record_id": worksheet_id})
-            ws_data_raw = ws_result.content[0].text
-            ws_parsed = json.loads(ws_data_raw)
-            worksheet_content = ws_parsed.get("content", "")
-        except Exception as e:
-            yield sse_event("error", error=f"Failed to fetch worksheet: {str(e)}")
-            return
-
-        # 2. Fetch Brand Identity
         yield sse_event("status", status="fetching_brand", agent="MarketingStrategist")
-        try:
-            brand_result = await execute_mcp_tool("get_record", {"collection": "brand_identities", "record_id": brand_identity_id})
-            brand_data_raw = brand_result.content[0].text
-            brand_parsed = json.loads(brand_data_raw)
-        except Exception as e:
-            yield sse_event("error", error=f"Failed to fetch brand identity: {str(e)}")
-            return
-
-        # 3. Fetch Customer Profile
         yield sse_event("status", status="fetching_icp", agent="MarketingStrategist")
+
         try:
-            icp_result = await execute_mcp_tool("get_record", {"collection": "ideal_customer_profiles", "record_id": customer_profile_id})
-            icp_data_raw = icp_result.content[0].text
-            icp_parsed = json.loads(icp_data_raw)
+            worksheet_content, brand_parsed, icp_parsed = await asyncio.gather(
+                fetch_worksheet(),
+                fetch_brand(),
+                fetch_icp()
+            )
         except Exception as e:
-            yield sse_event("error", error=f"Failed to fetch customer profile: {str(e)}")
+            yield sse_event("error", error=str(e))
             return
 
         # --- Step 4: Build Prompt ---

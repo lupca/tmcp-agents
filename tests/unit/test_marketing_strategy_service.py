@@ -1,10 +1,23 @@
 import sys
 import os
 import json
+import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+# Mock external dependencies before import
+mock_langchain_core = MagicMock()
+sys.modules["langchain_core"] = mock_langchain_core
+sys.modules["langchain_core.tools"] = MagicMock()
+sys.modules["langchain_core.messages"] = MagicMock()
+sys.modules["langchain_core.messages"].SystemMessage = MagicMock
+sys.modules["langchain_core.messages"].HumanMessage = MagicMock
+sys.modules["mcp"] = MagicMock()
+sys.modules["mcp.client"] = MagicMock()
+sys.modules["mcp.client.sse"] = MagicMock()
+sys.modules["mcp.client.stdio"] = MagicMock()
 
 from app.services.strategy import marketing_strategy_event_generator
 from app.utils.llm import parse_json_response
@@ -45,8 +58,10 @@ MOCK_STRATEGY = {
 }
 
 class TestMarketingStrategyService:
-    @pytest.mark.asyncio
-    async def test_successful_generation(self):
+    def test_successful_generation(self):
+        asyncio.run(self._test_successful_generation())
+
+    async def _test_successful_generation(self):
         """Full happy path: fetch 3 resources -> LLM -> JSON -> done."""
         
         # Mock MCP results
@@ -109,8 +124,10 @@ class TestMarketingStrategyService:
             strategy = done_event["marketingStrategy"]
             assert strategy["positioning"] == MOCK_STRATEGY["positioning"]
 
-    @pytest.mark.asyncio
-    async def test_mcp_failure_handles_gracefully(self):
+    def test_mcp_failure_handles_gracefully(self):
+        asyncio.run(self._test_mcp_failure_handles_gracefully())
+
+    async def _test_mcp_failure_handles_gracefully(self):
         """If one MCP call fails, it should emit an error."""
         with patch("app.services.strategy.execute_mcp_tool", side_effect=Exception("Database down")):
             events = []
@@ -121,8 +138,10 @@ class TestMarketingStrategyService:
             error = next(e for e in parsed if e["type"] == "error")
             assert "Failed to fetch worksheet" in error["error"]
 
-    @pytest.mark.asyncio
-    async def test_invalid_llm_json(self):
+    def test_invalid_llm_json(self):
+        asyncio.run(self._test_invalid_llm_json())
+
+    async def _test_invalid_llm_json(self):
         """If LLM returns bad JSON, emit error."""
         # Setup successful MCP calls
         mock_ws_result = MagicMock()
