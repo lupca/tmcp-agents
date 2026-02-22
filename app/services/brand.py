@@ -17,12 +17,13 @@ logger = logging.getLogger(__name__)
 async def brand_identity_event_generator(
     worksheet_id: str,
     language: str = "Vietnamese",
+    auth_token: str = "",
 ) -> AsyncGenerator[str, None]:
     """
     Generates SSE events for brand identity creation.
 
     Flow:
-    1. Fetch worksheet content via MCP
+    1. Fetch worksheet content via MCP (using user's auth token)
     2. Build prompt with worksheet content + language
     3. Stream LLM tokens
     4. Parse JSON result and emit done event
@@ -32,10 +33,10 @@ async def brand_identity_event_generator(
         yield sse_event("status", status="fetching_worksheet", agent="BrandExpert")
 
         try:
-            result = await execute_mcp_tool(
-                "get_record",
-                {"collection": "worksheets", "record_id": worksheet_id},
-            )
+            mcp_args = {"collection": "worksheets", "record_id": worksheet_id}
+            if auth_token:
+                mcp_args["auth_token"] = auth_token
+            result = await execute_mcp_tool("get_record", mcp_args)
             worksheet_data = result.content[0].text
         except Exception as e:
             logger.error(f"MCP fetch failed: {e}")

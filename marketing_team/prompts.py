@@ -140,17 +140,16 @@ CUSTOMER_PROFILE_PROMPT = """
 **Task:** Create one detailed ICP based on the provided business worksheet and brand identity.
 
 **Context:**
-You have been given foundational documents for a business. Your task is to analyze them thoroughly to build a profile of the *single* most ideal customer for this brand.
-- **Business & Audience Worksheet:**
-  ---
-  {worksheetContent}
-  ---
+You have been given the brand identity for a business.
 - **Brand Identity:**
   ---
   - Brand Name: {brandName}
   - Slogan: {slogan}
   - Mission: {missionStatement}
   - Keywords: {keywords}
+  - Voice/Tone: {voiceTone}
+  - Target Audience: {targetAudience}
+  - Colors: {colors}
   ---
 
 **Instructions & Rules:**

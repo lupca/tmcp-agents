@@ -4,7 +4,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def get_ollama_llm(temperature: float = 0, model: str = "qwen2.5"):
+def get_ollama_llm(temperature: float = 0, model: str = "qwen3:4b-instruct-2507-q4_K_M"):
     """Create an Ollama LLM instance.
 
     Centralizes LLM creation so all modules share the same config.

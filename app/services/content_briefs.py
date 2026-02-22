@@ -43,6 +43,9 @@ async def _generate_briefs_for_stage(
         brand_voice_data = brand.get("voice_and_tone", brand.get("voiceAndTone", {}))
         brand_voice = str(brand_voice_data) if brand_voice_data else ""
 
+        core_messaging = brand.get("core_messaging", {})
+        psychographics = persona.get("psychographics", {})
+
         kpi_targets = campaign.get("kpi_targets", {})
         strategy = kpi_targets.get("strategy", {}) if isinstance(kpi_targets, dict) else {}
 
@@ -51,14 +54,14 @@ async def _generate_briefs_for_stage(
             campaign_goal=strategy.get("goal", campaign.get("goal", "")),
             brand_name=brand.get("brand_name", brand.get("brandName", "Brand")),
             brand_voice=brand_voice,
-            brand_keywords=safe_join(brand.get("keywords", [])),
+            brand_keywords=safe_join(core_messaging.get("keywords", [])),
             product_name=product.get("name", "N/A"),
             product_usp=product.get("usp", "N/A"),
             product_features=safe_join(product.get("key_features", [])),
             product_benefits=safe_join(product.get("key_benefits", [])),
             persona_name=persona.get("persona_name", persona.get("personaName", "Customer")),
-            persona_goals=safe_join(persona.get("goals_and_motivations", persona.get("goalsAndMotivations", []))),
-            persona_pain_points=safe_join(persona.get("pain_points_and_challenges", persona.get("painPointsAndChallenges", []))),
+            persona_goals=safe_join(psychographics.get("goals", [])),
+            persona_pain_points=safe_join(psychographics.get("pain_points", [])),
             language=language,
             num_angles=num_angles,
             funnel_stage=stage,

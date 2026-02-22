@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -33,6 +33,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+def _extract_auth_token(raw_request: Request) -> str:
+    """Extract bearer token from Authorization header."""
+    auth = raw_request.headers.get("authorization", "")
+    if auth.lower().startswith("bearer "):
+        return auth[7:]
+    return ""
+
+
 @app.post("/chat")
 async def chat_endpoint(request: ChatRequest):
     return StreamingResponse(
@@ -54,28 +63,33 @@ async def generate_worksheet(request: WorksheetRequest):
     )
 
 @app.post("/generate-brand-identity")
-async def generate_brand_identity(request: BrandIdentityRequest):
+async def generate_brand_identity(request: BrandIdentityRequest, raw_request: Request):
+    auth_token = _extract_auth_token(raw_request)
     return StreamingResponse(
         brand_identity_event_generator(
             worksheet_id=request.worksheetId,
             language=request.language,
+            auth_token=auth_token,
         ),
         media_type="text/event-stream"
     )
 
 @app.post("/generate-customer-profile")
-async def generate_customer_profile(request: CustomerProfileRequest):
+async def generate_customer_profile(request: CustomerProfileRequest, raw_request: Request):
+    auth_token = _extract_auth_token(raw_request)
     return StreamingResponse(
         customer_profile_event_generator(
             brand_identity_id=request.brandIdentityId,
             language=request.language,
+            auth_token=auth_token,
         ),
         media_type="text/event-stream"
     )
 
 
 @app.post("/generate-marketing-strategy")
-async def generate_marketing_strategy(request: MarketingStrategyRequest):
+async def generate_marketing_strategy(request: MarketingStrategyRequest, raw_request: Request):
+    auth_token = _extract_auth_token(raw_request)
     return StreamingResponse(
         marketing_strategy_event_generator(
             worksheet_id=request.worksheetId,
@@ -83,6 +97,7 @@ async def generate_marketing_strategy(request: MarketingStrategyRequest):
             customer_profile_id=request.customerProfileId,
             goal=request.goal,
             language=request.language,
+            auth_token=auth_token,
         ),
         media_type="text/event-stream"
     )

@@ -17,26 +17,26 @@ logger = logging.getLogger(__name__)
 async def customer_profile_event_generator(
     brand_identity_id: str,
     language: str = "Vietnamese",
+    auth_token: str = "",
 ) -> AsyncGenerator[str, None]:
     """
     Generates SSE events for ideal customer profile creation.
 
     Flow:
-    1. Fetch brand identity via MCP
-    2. Fetch linked worksheet via MCP
-    3. Build prompt with brand + worksheet data
-    4. Stream LLM tokens
-    5. Parse JSON result and emit done event
+    1. Fetch brand identity via MCP (using user's auth token)
+    2. Build prompt with brand data
+    3. Stream LLM tokens
+    4. Parse JSON result and emit done event
     """
     try:
         # --- Step 1: Fetch brand identity via MCP ---
         yield sse_event("status", status="fetching_brand", agent="MarketResearcher")
 
         try:
-            result = await execute_mcp_tool(
-                "get_record",
-                {"collection": "brand_identities", "record_id": brand_identity_id},
-            )
+            mcp_args = {"collection": "brand_identities", "record_id": brand_identity_id}
+            if auth_token:
+                mcp_args["auth_token"] = auth_token
+            result = await execute_mcp_tool("get_record", mcp_args)
             brand_data_raw = result.content[0].text
         except Exception as e:
             logger.error(f"MCP fetch brand identity failed: {e}")
@@ -50,45 +50,22 @@ async def customer_profile_event_generator(
             yield sse_event("error", error="Failed to parse brand identity data.")
             return
 
-        # --- Step 2: Fetch linked worksheet via MCP ---
-        worksheet_id = brand_parsed.get("worksheetId", "")
-        if not worksheet_id:
-            yield sse_event("error", error="Brand identity has no linked worksheet.")
-            return
-
-        yield sse_event("status", status="fetching_worksheet", agent="MarketResearcher")
-
-        try:
-            result = await execute_mcp_tool(
-                "get_record",
-                {"collection": "worksheets", "record_id": worksheet_id},
-            )
-            worksheet_data_raw = result.content[0].text
-        except Exception as e:
-            logger.error(f"MCP fetch worksheet failed: {e}")
-            yield sse_event("error", error=f"Failed to fetch worksheet: {e}")
-            return
-
-        # Extract worksheet content
-        try:
-            ws_parsed = json.loads(worksheet_data_raw)
-            worksheet_content = ws_parsed.get("content", "") or ws_parsed.get("title", "")
-            if not worksheet_content:
-                worksheet_content = worksheet_data_raw
-        except (json.JSONDecodeError, TypeError):
-            worksheet_content = worksheet_data_raw
-
-        # --- Step 3: Build prompt and call LLM ---
+        # --- Step 2: Build prompt and call LLM ---
         yield sse_event("status", status="analyzing", agent="MarketResearcher")
 
         llm = get_ollama_llm(temperature=0.7)
 
+        core_messaging = brand_parsed.get("core_messaging", {})
+        visual_assets = brand_parsed.get("visual_assets", {})
+
         prompt = CUSTOMER_PROFILE_PROMPT.format(
-            worksheetContent=worksheet_content,
-            brandName=brand_parsed.get("brandName", ""),
-            slogan=brand_parsed.get("slogan", ""),
-            missionStatement=brand_parsed.get("missionStatement", ""),
-            keywords=json.dumps(brand_parsed.get("keywords", []), ensure_ascii=False),
+            brandName=brand_parsed.get("brand_name", "") or brand_parsed.get("name", ""),
+            slogan=core_messaging.get("slogan", "") or core_messaging.get("mission_statement", ""),
+            missionStatement=core_messaging.get("mission_statement", ""),
+            keywords=json.dumps(core_messaging.get("keywords", []), ensure_ascii=False),
+            voiceTone=brand_parsed.get("voice_and_tone", ""),
+            targetAudience="", # No direct equivalent column in new schema
+            colors=json.dumps(visual_assets.get("color_palette", []), ensure_ascii=False),
             language=language,
         )
 

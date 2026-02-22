@@ -16,18 +16,25 @@ async def marketing_strategy_event_generator(
     customer_profile_id: str,
     goal: str = "",
     language: str = "Vietnamese",
+    auth_token: str = "",
 ) -> AsyncGenerator[str, None]:
     """
     Orchestrate the AI agent to generate a Marketing Strategy.
     Fetches Worksheet + Brand + ICP via MCP, then streams LLM output.
     """
     try:
-        # --- Step 1: Fetch all contexts in parallel (or sequential for better status updates) ---
-        
+        # --- Step 1: Fetch all contexts ---
+
+        def _mcp_args(collection: str, record_id: str) -> dict:
+            args = {"collection": collection, "record_id": record_id}
+            if auth_token:
+                args["auth_token"] = auth_token
+            return args
+
         # 1. Fetch Worksheet
         yield sse_event("status", status="fetching_worksheet", agent="MarketingStrategist")
         try:
-            ws_result = await execute_mcp_tool("get_record", {"collection": "worksheets", "record_id": worksheet_id})
+            ws_result = await execute_mcp_tool("get_record", _mcp_args("worksheets", worksheet_id))
             ws_data_raw = ws_result.content[0].text
             ws_parsed = json.loads(ws_data_raw)
             worksheet_content = ws_parsed.get("content", "")
@@ -38,7 +45,7 @@ async def marketing_strategy_event_generator(
         # 2. Fetch Brand Identity
         yield sse_event("status", status="fetching_brand", agent="MarketingStrategist")
         try:
-            brand_result = await execute_mcp_tool("get_record", {"collection": "brand_identities", "record_id": brand_identity_id})
+            brand_result = await execute_mcp_tool("get_record", _mcp_args("brand_identities", brand_identity_id))
             brand_data_raw = brand_result.content[0].text
             brand_parsed = json.loads(brand_data_raw)
         except Exception as e:
@@ -48,7 +55,7 @@ async def marketing_strategy_event_generator(
         # 3. Fetch Customer Profile
         yield sse_event("status", status="fetching_icp", agent="MarketingStrategist")
         try:
-            icp_result = await execute_mcp_tool("get_record", {"collection": "ideal_customer_profiles", "record_id": customer_profile_id})
+            icp_result = await execute_mcp_tool("get_record", _mcp_args("customer_personas", customer_profile_id))
             icp_data_raw = icp_result.content[0].text
             icp_parsed = json.loads(icp_data_raw)
         except Exception as e:
@@ -68,23 +75,20 @@ async def marketing_strategy_event_generator(
     ---
 """
 
+        core_messaging = brand_parsed.get("core_messaging", {})
+        psychographics = icp_parsed.get("psychographics", {})
+
         # Ensure JSON fields are strings for prompt injection
         prompt = MARKETING_STRATEGY_PROMPT.format(
             worksheetContent=worksheet_content,
-            brandName=brand_parsed.get("brandName", ""),
-            missionStatement=brand_parsed.get("missionStatement", ""),
-            keywords=json.dumps(brand_parsed.get("keywords", [])),
-            personaName=icp_parsed.get("personaName", ""),
+            brandName=brand_parsed.get("brand_name", "") or brand_parsed.get("brandName", ""),
+            missionStatement=core_messaging.get("mission_statement", ""),
+            keywords=json.dumps(core_messaging.get("keywords", [])),
+            personaName=icp_parsed.get("persona_name", "") or icp_parsed.get("personaName", ""),
             icpSummary=icp_parsed.get("summary", ""),
-            goals=icp_parsed.get("goalsAndMotivations", ""), # Already stringified JSON in DB usually, but let's check. 
-            # In DB, JSON fields are stored as JSON. mcp read_resource returns JSON string.
-            # verify if icp_parsed['goalsAndMotivations'] is dict or string?
-            # PocketBase returns JSON fields as dicts. So we need to dump them.
-            painPoints=json.dumps(icp_parsed.get("painPointsAndChallenges", {})), # using dump just in case it's a dict
-            interests=json.dumps(icp_parsed.get("psychographics", {}).get("interests", "")), # accessing nested
-            # Wait, prompts.py expects {interests}.
-            # The prompt says: Interests: {interests}
-            # icp_parsed['psychographics'] is a dict (or string JSON).
+            goals=json.dumps(psychographics.get("goals", [])),
+            painPoints=json.dumps(psychographics.get("pain_points", [])),
+            interests=json.dumps(psychographics),
             customPromptSection=custom_prompt_section,
             language=language
         )
@@ -96,14 +100,14 @@ async def marketing_strategy_event_generator(
         # Re-formatting with safe dumps
         prompt = MARKETING_STRATEGY_PROMPT.format(
             worksheetContent=worksheet_content,
-            brandName=brand_parsed.get("brandName", ""),
-            missionStatement=brand_parsed.get("missionStatement", ""),
-            keywords=safe_dump(brand_parsed.get("keywords", [])),
-            personaName=icp_parsed.get("personaName", ""),
+            brandName=brand_parsed.get("brand_name", "") or brand_parsed.get("brandName", ""),
+            missionStatement=core_messaging.get("mission_statement", ""),
+            keywords=safe_dump(core_messaging.get("keywords", [])),
+            personaName=icp_parsed.get("persona_name", "") or icp_parsed.get("personaName", ""),
             icpSummary=icp_parsed.get("summary", ""),
-            goals=safe_dump(icp_parsed.get("goalsAndMotivations", {})),
-            painPoints=safe_dump(icp_parsed.get("painPointsAndChallenges", {})),
-            interests=safe_dump(icp_parsed.get("psychographics", {})), # Just dump the whole psychographics object or specific field? Prompt said {interests}. I'll dump whole psychographics for context.
+            goals=safe_dump(psychographics.get("goals", [])),
+            painPoints=safe_dump(psychographics.get("pain_points", [])),
+            interests=safe_dump(psychographics),
             customPromptSection=custom_prompt_section,
             language=language
         )
