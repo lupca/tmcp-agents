@@ -8,6 +8,9 @@ from contextlib import AsyncExitStack
 
 # Helper to run a tool via SSE
 from mcp.client.sse import sse_client
+from contextvars import ContextVar
+
+auth_token_var: ContextVar[str] = ContextVar("auth_token", default="")
 
 def parse_mcp_result(result: Any) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """Parse MCP tool result. Returns (data, error_msg)."""
@@ -25,6 +28,10 @@ def parse_mcp_result(result: Any) -> Tuple[Optional[Dict[str, Any]], Optional[st
 async def execute_mcp_tool(tool_name: str, arguments: dict) -> Any:
     # URL of the standalone MCP server
     sse_url = os.getenv("MCP_SERVER_URL", "http://localhost:7999/sse")
+
+    token = auth_token_var.get()
+    if token and tool_name in ["get_record", "list_records", "create_record", "update_record", "delete_record"] and "auth_token" not in arguments:
+        arguments["auth_token"] = token
 
     async with sse_client(sse_url) as (read, write):
         async with ClientSession(read, write) as session:

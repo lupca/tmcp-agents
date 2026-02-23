@@ -21,6 +21,8 @@ def _collect_events(raw_events):
 MOCK_WORKSHEET = {
     "title": "Modern Cafe Worksheet",
     "content": "A cozy cafe in downtown Seattle focusing on remote workers and high-quality coffee.",
+    "brandRefs": ["bi_1"],
+    "customerRefs": ["icp_1"]
 }
 
 MOCK_BRAND = {
@@ -59,6 +61,9 @@ class TestMarketingStrategyService:
         mock_icp_result = MagicMock()
         mock_icp_result.content = [MagicMock(text=json.dumps(MOCK_ICP))]
 
+        mock_product_result = MagicMock()
+        mock_product_result.content = [MagicMock(text=json.dumps({"name": "Product 1"}))]
+
         # Mock execute_mcp_tool to return different things based on collection
         async def mock_execute_mcp_tool(tool_name, args):
             if tool_name != "get_record":
@@ -68,8 +73,10 @@ class TestMarketingStrategyService:
                 return mock_ws_result
             elif collection == "brand_identities":
                 return mock_brand_result
-            elif collection == "ideal_customer_profiles":
+            elif collection == "customer_personas":
                 return mock_icp_result
+            elif collection == "products_services":
+                return mock_product_result
             raise ValueError(f"Unexpected collection: {collection}")
 
         # Mock LLM
@@ -88,8 +95,8 @@ class TestMarketingStrategyService:
             events = []
             async for event in marketing_strategy_event_generator(
                 worksheet_id="ws_1",
-                brand_identity_id="bi_1",
-                customer_profile_id="icp_1",
+                campaign_type="awareness",
+                product_id="prod_1",
                 goal="Increase foot traffic",
                 language="English"
             ):
@@ -114,7 +121,7 @@ class TestMarketingStrategyService:
         """If one MCP call fails, it should emit an error."""
         with patch("app.services.strategy.execute_mcp_tool", side_effect=Exception("Database down")):
             events = []
-            async for event in marketing_strategy_event_generator("ws", "bi", "icp"):
+            async for event in marketing_strategy_event_generator("ws", "awareness", "prod"):
                 events.append(event)
             
             parsed = _collect_events(events)
@@ -149,7 +156,7 @@ class TestMarketingStrategyService:
              patch("app.services.strategy.get_ollama_llm", return_value=mock_llm):
              
             events = []
-            async for event in marketing_strategy_event_generator("ws", "bi", "icp"):
+            async for event in marketing_strategy_event_generator("ws", "awareness", "prod"):
                 events.append(event)
                 
             parsed = _collect_events(events)

@@ -12,8 +12,8 @@ from app.utils.llm import parse_json_response
 
 async def marketing_strategy_event_generator(
     worksheet_id: str,
-    brand_identity_id: str,
-    customer_profile_id: str,
+    campaign_type: str = "awareness",
+    product_id: str = "",
     goal: str = "",
     language: str = "Vietnamese",
     auth_token: str = "",
@@ -38,6 +38,18 @@ async def marketing_strategy_event_generator(
             ws_data_raw = ws_result.content[0].text
             ws_parsed = json.loads(ws_data_raw)
             worksheet_content = ws_parsed.get("content", "")
+            
+            # Extract brand and customer refs
+            brand_refs = ws_parsed.get("brandRefs", [])
+            customer_refs = ws_parsed.get("customerRefs", [])
+            
+            if not brand_refs:
+                raise ValueError("Worksheet has no associated Brand Identity.")
+            if not customer_refs:
+                raise ValueError("Worksheet has no associated Customer Profile.")
+                
+            brand_identity_id = brand_refs[0]
+            customer_profile_id = customer_refs[0]
         except Exception as e:
             yield sse_event("error", error=f"Failed to fetch worksheet: {str(e)}")
             return
@@ -62,8 +74,27 @@ async def marketing_strategy_event_generator(
             yield sse_event("error", error=f"Failed to fetch customer profile: {str(e)}")
             return
 
+        # 4. Fetch Product (Optional)
+        product_parsed = {}
+        if product_id:
+            yield sse_event("status", status="fetching_product", agent="MarketingStrategist")
+            try:
+                product_result = await execute_mcp_tool("get_record", _mcp_args("products_services", product_id))
+                product_data_raw = product_result.content[0].text
+                product_parsed = json.loads(product_data_raw)
+            except Exception as e:
+                # Non-fatal if product fetch fails, but log it or send error event.
+                # For now, we just skip product context if it fails.
+                print(f"Failed to fetch product: {str(e)}")
+
         # --- Step 4: Build Prompt ---
         yield sse_event("status", status="analyzing", agent="MarketingStrategist")
+
+        def safe_dump(obj):
+            try:
+                return json.dumps(obj, ensure_ascii=False) if obj else ""
+            except Exception:
+                return str(obj)
 
         # Format custom prompt section if goal is present
         custom_prompt_section = ""
@@ -78,24 +109,14 @@ async def marketing_strategy_event_generator(
         core_messaging = brand_parsed.get("core_messaging", {})
         psychographics = icp_parsed.get("psychographics", {})
 
-        # Ensure JSON fields are strings for prompt injection
-        prompt = MARKETING_STRATEGY_PROMPT.format(
-            worksheetContent=worksheet_content,
-            brandName=brand_parsed.get("brand_name", "") or brand_parsed.get("brandName", ""),
-            missionStatement=core_messaging.get("mission_statement", ""),
-            keywords=json.dumps(core_messaging.get("keywords", [])),
-            personaName=icp_parsed.get("persona_name", "") or icp_parsed.get("personaName", ""),
-            icpSummary=icp_parsed.get("summary", ""),
-            goals=json.dumps(psychographics.get("goals", [])),
-            painPoints=json.dumps(psychographics.get("pain_points", [])),
-            interests=json.dumps(psychographics),
-            customPromptSection=custom_prompt_section,
-            language=language
-        )
-        
-        # Helper to safely dump if it's a dict, else return as is
-        def safe_dump(val):
-            return json.dumps(val) if isinstance(val, (dict, list)) else str(val)
+        product_context = ""
+        if product_parsed:
+            product_context = f"""
+    - Product Name: {product_parsed.get('name', '')}
+    - USP: {product_parsed.get('usp', '')}
+    - Key Features: {safe_dump(product_parsed.get('key_features', []))}
+    - Key Benefits: {safe_dump(product_parsed.get('key_benefits', []))}
+"""
 
         # Re-formatting with safe dumps
         prompt = MARKETING_STRATEGY_PROMPT.format(
@@ -108,6 +129,8 @@ async def marketing_strategy_event_generator(
             goals=safe_dump(psychographics.get("goals", [])),
             painPoints=safe_dump(psychographics.get("pain_points", [])),
             interests=safe_dump(psychographics),
+            campaignType=campaign_type,
+            productContext=product_context,
             customPromptSection=custom_prompt_section,
             language=language
         )

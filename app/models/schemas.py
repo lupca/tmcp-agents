@@ -8,10 +8,8 @@ class ChatResponse(BaseModel):
     status: str
 
 class WorksheetRequest(BaseModel):
-    businessDescription: str = Field(..., min_length=20)
-    targetAudience: str = Field(..., min_length=20)
-    painPoints: str = Field(..., min_length=20)
-    uniqueSellingProposition: str = Field(..., min_length=20)
+    brandIds: list[str] = Field(default_factory=list)
+    customerIds: list[str] = Field(default_factory=list)
     language: str = "Vietnamese"
 
 class BrandIdentityRequest(BaseModel):
@@ -25,8 +23,8 @@ class CustomerProfileRequest(BaseModel):
 
 class MarketingStrategyRequest(BaseModel):
     worksheetId: str = Field(..., min_length=1)
-    brandIdentityId: str = Field(..., min_length=1)
-    customerProfileId: str = Field(..., min_length=1)
+    campaignType: str = Field(default="awareness")
+    productId: str = Field(default="")
     goal: str = ""
     language: str = "Vietnamese"
 

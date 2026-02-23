@@ -188,7 +188,11 @@ async def batch_generate_event_stream(
     language: str,
     platforms: List[str],
     num_masters: int,
+    auth_token: str = "",
 ) -> AsyncGenerator[str, None]:
+    from app.tools.mcp_bridge import auth_token_var
+    auth_token_var.set(auth_token)
+    
     invalid = [p for p in platforms if p not in VALID_PLATFORMS]
     if invalid:
         yield sse_event("error", error=f"Invalid platforms: {', '.join(invalid)}")

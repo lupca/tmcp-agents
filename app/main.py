@@ -50,14 +50,14 @@ async def chat_endpoint(request: ChatRequest):
     )
 
 @app.post("/generate-worksheet")
-async def generate_worksheet(request: WorksheetRequest):
+async def generate_worksheet(request: WorksheetRequest, raw_request: Request):
+    auth_token = _extract_auth_token(raw_request)
     return StreamingResponse(
         worksheet_event_generator(
-            business_description=request.businessDescription,
-            target_audience=request.targetAudience,
-            pain_points=request.painPoints,
-            usp=request.uniqueSellingProposition,
+            brand_ids=request.brandIds,
+            customer_ids=request.customerIds,
             language=request.language,
+            auth_token=auth_token,
         ),
         media_type="text/event-stream"
     )
@@ -93,8 +93,8 @@ async def generate_marketing_strategy(request: MarketingStrategyRequest, raw_req
     return StreamingResponse(
         marketing_strategy_event_generator(
             worksheet_id=request.worksheetId,
-            brand_identity_id=request.brandIdentityId,
-            customer_profile_id=request.customerProfileId,
+            campaign_type=request.campaignType,
+            product_id=request.productId,
             goal=request.goal,
             language=request.language,
             auth_token=auth_token,
@@ -104,32 +104,37 @@ async def generate_marketing_strategy(request: MarketingStrategyRequest, raw_req
 
 
 @app.post("/generate-master-content")
-async def generate_master_content(request: MasterContentGenerationRequest):
+async def generate_master_content(request: MasterContentGenerationRequest, raw_request: Request):
+    auth_token = _extract_auth_token(raw_request)
     return StreamingResponse(
         master_content_event_generator(
             campaign_id=request.campaignId,
             workspace_id=request.workspaceId,
             language=request.languagePreference,
+            auth_token=auth_token,
         ),
         media_type="text/event-stream"
     )
 
 
 @app.post("/generate-platform-variants/{master_content_id}")
-async def generate_platform_variants(master_content_id: str, request: PlatformVariantGenerationRequest):
+async def generate_platform_variants(master_content_id: str, request: PlatformVariantGenerationRequest, raw_request: Request):
+    auth_token = _extract_auth_token(raw_request)
     return StreamingResponse(
         platform_variants_event_generator(
             master_content_id=master_content_id,
             platforms=request.platforms,
             workspace_id=request.workspaceId,
             language=request.languagePreference,
+            auth_token=auth_token,
         ),
         media_type="text/event-stream"
     )
 
 
 @app.post("/batch-generate-posts")
-async def batch_generate_posts(request: BatchGenerationRequest):
+async def batch_generate_posts(request: BatchGenerationRequest, raw_request: Request):
+    auth_token = _extract_auth_token(raw_request)
     return StreamingResponse(
         batch_generate_event_stream(
             campaign_id=request.campaignId,
@@ -137,19 +142,22 @@ async def batch_generate_posts(request: BatchGenerationRequest):
             language=request.language,
             platforms=request.platforms,
             num_masters=request.numMasters,
+            auth_token=auth_token,
         ),
         media_type="text/event-stream"
     )
 
 
 @app.post("/generate-content-briefs")
-async def generate_content_briefs(request: ContentBriefsGenerationRequest):
+async def generate_content_briefs(request: ContentBriefsGenerationRequest, raw_request: Request):
+    auth_token = _extract_auth_token(raw_request)
     return StreamingResponse(
         content_briefs_event_generator(
             campaign_id=request.campaignId,
             workspace_id=request.workspaceId,
             language=request.language,
             angles_per_stage=request.anglesPerStage,
+            auth_token=auth_token,
         ),
         media_type="text/event-stream"
     )

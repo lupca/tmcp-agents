@@ -17,7 +17,10 @@ async def platform_variants_event_generator(
     platforms: list[str],
     workspace_id: str,
     language: str = "Vietnamese",
+    auth_token: str = "",
 ) -> AsyncGenerator[str, None]:
+    from app.tools.mcp_bridge import auth_token_var
+    auth_token_var.set(auth_token)
     """
     Wraps the variant_generator_agent graph with SSE streaming.
     Uses astream_events (like chat.py) for real-time transparency.

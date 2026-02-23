@@ -94,7 +94,10 @@ async def content_briefs_event_generator(
     workspace_id: str,
     language: str = "Vietnamese",
     angles_per_stage: int = 6,
+    auth_token: str = "",
 ) -> AsyncGenerator[str, None]:
+    from app.tools.mcp_bridge import auth_token_var
+    auth_token_var.set(auth_token)
     """
     Generate content briefs for all funnel stages in parallel.
     Uses asyncio.gather to run 4 LLM calls concurrently (one per funnel stage).

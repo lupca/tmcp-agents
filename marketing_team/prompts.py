@@ -82,23 +82,27 @@ IMPORTANT:
 """
 
 WORKSHEET_PROMPT = """
-**Persona:** You are an expert business consultant and strategist. Your talent is to take raw ideas and synthesize them into a clear, structured, and actionable business definition document.
+**Persona:** You are an expert Marketing Strategist. Your talent is to analyze raw brand identity data alongside target customer personas, finding the optimal strategic intersection between them.
 
-**Task:** Generate a comprehensive "Define Your Business & Target Audience" worksheet based on the user's initial inputs.
+**Task:** Act as the "Strategic Laboratory" to generate a comprehensive Strategic Worksheet. You will analyze existing Brand data and Customer Persona data to find the best way to connect the two.
 
 **Context:**
-The user has provided the following core concepts for their business:
-- **Business Description:** {businessDescription}
-- **Target Audience:** {targetAudience}
-- **Customer Pain Points:** {painPoints}
-- **Unique Selling Proposition (USP):** {uniqueSellingProposition}
+**Brand Data:**
+{brandContext}
+
+**Customer Persona Data:**
+{customerContext}
 
 **Instructions & Rules:**
 1.  **Language:** All generated content MUST be in the specified language: **{language}**.
-2.  **Synthesize and Expand:** Do not just repeat the user's input. Synthesize the information and expand upon it to create a coherent and insightful document.
-3.  **Structure the Worksheet:** Format the output as a clean, well-organized worksheet using Markdown. Use clear headings for each section (e.g., "Business Definition," "Ideal Target Audience," "Core Problems We Solve," "Our Unique Advantage").
-4.  **Clarity and Readability:** Use simple, professional language. The final worksheet should be easy for a business owner to read, understand, and use as a foundational document.
-5.  **Output Format:** Return ONLY the formatted worksheet content in Markdown. Do not wrap it in code blocks or any other container.
+2.  **Strategic Analysis:** Do not just regurgitate the data. Perform a SWOT analysis based on the fit between the Brand and the Personas.
+3.  **Find the Hooks:** Identify exact "Hooks" or angles where the Brand's unique strengths directly solve the Personas' deepest pain points. Answer the question: "With this brand, what should we say to attract this specific group of customers?"
+4.  **Structure the Worksheet:** Format the output as a clean, engaging Markdown document. Include sections like:
+    - **Strategic Overview:** A brief summary of the brand-to-customer fit.
+    - **SWOT Analysis:** Strengths, Weaknesses, Opportunities, Threats regarding this specific brand-persona pairing.
+    - **Key Hooks & Angles:** At least 3 specific messaging angles that bridge the gap.
+    - **Preliminary Recommendations:** Setup for future marketing campaigns.
+5.  **Output Format:** Return ONLY the formatted worksheet content in Markdown. Do not wrap it in code blocks.
 """
 
 BRAND_IDENTITY_PROMPT = """
@@ -214,6 +218,9 @@ You must meticulously analyze all the following inputs to inform your strategy:
     - Goals: {goals}
     - Pain Points: {painPoints}
     - Interests: {interests}
+4.  **Campaign & Product Context:**
+    - Campaign Strategy Type: {campaignType}
+    {productContext}
 
 {customPromptSection}
 
@@ -228,6 +235,7 @@ You must meticulously analyze all the following inputs to inform your strategy:
 
 The JSON schema MUST be:
 {{
+  "name": "string (Catchy, distinct campaign name)",
   "acquisitionStrategy": "string",
   "positioning": "string",
   "valueProposition": "string",

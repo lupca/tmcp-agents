@@ -33,26 +33,20 @@ def test_chat_endpoint_success(mock_chat_gen, client: TestClient):
     assert 'data: {"type": "content", "content": "Hello World"}' in lines
 
 def test_generate_worksheet_validation(client: TestClient):
-    # Too short strings
+    # Invalid types
     payload = {
-        "businessDescription": "Short",
-        "targetAudience": "Short",
-        "painPoints": "Short",
-        "uniqueSellingProposition": "Short",
+        "brandIds": "Not a list",
+        "customerIds": "Not a list",
         "language": "Vietnamese"
     }
     response = client.post("/generate-worksheet", json=payload)
     assert response.status_code == 422
-    # Check for specific validation errors (min_length)
-    assert "String should have at least 20 characters" in response.text
 
 @patch("app.main.worksheet_event_generator", side_effect=mock_event_generator)
 def test_generate_worksheet_success(mock_worksheet_gen, client: TestClient):
     payload = {
-        "businessDescription": "This is a long enough description for the business logic test.",
-        "targetAudience": "This is a long enough target audience description for the test.",
-        "painPoints": "This is a long enough pain points description for the test.",
-        "uniqueSellingProposition": "This is a long enough USP description for the test.",
+        "brandIds": ["123", "456"],
+        "customerIds": ["789"],
         "language": "Vietnamese"
     }
     response = client.post("/generate-worksheet", json=payload)
