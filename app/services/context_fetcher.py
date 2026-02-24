@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Dict, Any, Tuple
 
@@ -45,107 +46,147 @@ async def fetch_campaign_context(campaign_id: str) -> Tuple[Dict[str, Any], Dict
     campaign_data = context.get("campaign", {})
     expand = campaign_data.get("expand", {})
 
-    # 2. Extract Worksheet from expand or fetch separately
+    # Helper functions for fetching components
+    async def fetch_worksheet_task(ws_id: str) -> Tuple[Dict[str, Any], str]:
+        try:
+            res = await execute_mcp_tool(
+                "get_record",
+                {"collection": "worksheets", "record_id": ws_id},
+            )
+            return parse_mcp_result(res)
+        except Exception as e:
+            logger.warning(f"Failed to fetch worksheet: {e}")
+            return {}, str(e)
+
+    async def fetch_product_task(prod_id: str) -> Tuple[Dict[str, Any], str]:
+        try:
+            res = await execute_mcp_tool(
+                "get_record",
+                {
+                    "collection": "products_services",
+                    "record_id": prod_id,
+                    "expand": "brand_id",
+                },
+            )
+            return parse_mcp_result(res)
+        except Exception as e:
+            logger.warning(f"Failed to fetch product: {e}")
+            return {}, str(e)
+
+    # 2. Parallel Fetch: Worksheet & Product
+    tasks = []
+    task_map = {}
+
+    # Check if Worksheet is in expand or needs fetching
     worksheet_data = expand.get("worksheet_id")
     if worksheet_data:
         context["worksheet"] = worksheet_data
     else:
         worksheet_id = campaign_data.get("worksheet_id")
         if worksheet_id:
-            try:
-                result = await execute_mcp_tool(
-                    "get_record",
-                    {"collection": "worksheets", "record_id": worksheet_id},
-                )
-                ws, err = parse_mcp_result(result)
-                context["worksheet"] = ws or {}
-                if err:
-                    errors["worksheet"] = err
-            except Exception as e:
-                logger.warning(f"Failed to fetch worksheet: {e}")
-                context["worksheet"] = {}
-                errors["worksheet"] = str(e)
+            tasks.append(fetch_worksheet_task(worksheet_id))
+            task_map["worksheet"] = len(tasks) - 1
         else:
             context["worksheet"] = {}
 
-    # 3. Extract Product from expand
+    # Check if Product is in expand or needs fetching
     product_data = expand.get("product_id")
     if product_data:
         context["product"] = product_data
     else:
         product_id = campaign_data.get("product_id")
         if product_id:
-            try:
-                result = await execute_mcp_tool(
-                    "get_record",
-                    {
-                        "collection": "products_services",
-                        "record_id": product_id,
-                        "expand": "brand_id",
-                    },
-                )
-                prod, err = parse_mcp_result(result)
-                context["product"] = prod or {}
-                if err:
-                    errors["product"] = err
-            except Exception as e:
-                logger.warning(f"Failed to fetch product: {e}")
-                context["product"] = {}
-                errors["product"] = str(e)
+            tasks.append(fetch_product_task(product_id))
+            task_map["product"] = len(tasks) - 1
         else:
             context["product"] = {}
 
-    # 4. Extract Brand Identity: prefer product->brand expand, fallback to worksheet.brandRefs
+    if tasks:
+        fetch_results = await asyncio.gather(*tasks)
+
+        if "worksheet" in task_map:
+            ws, err = fetch_results[task_map["worksheet"]]
+            context["worksheet"] = ws or {}
+            if err:
+                errors["worksheet"] = err
+
+        if "product" in task_map:
+            prod, err = fetch_results[task_map["product"]]
+            context["product"] = prod or {}
+            if err:
+                errors["product"] = err
+
+    # 3. Determine Brand and Customer Profile needs
+
+    # Brand Logic
     brand_data = None
-    # Try product.expand.brand_id first
     product = context.get("product", {})
     if product:
         brand_data = product.get("expand", {}).get("brand_id")
-    # Also try campaign.expand.product_id.expand.brand_id
     if not brand_data and expand.get("product_id"):
         brand_data = expand["product_id"].get("expand", {}).get("brand_id")
 
     if brand_data:
         context["brandIdentity"] = brand_data
-    else:
-        # Fallback: fetch first brandRef from worksheet
-        worksheet = context.get("worksheet", {})
+
+    worksheet = context.get("worksheet", {})
+
+    # Prepare Phase 3 Tasks
+    async def fetch_brand_task(brand_id: str) -> Tuple[Dict[str, Any], str]:
+        try:
+            res = await execute_mcp_tool(
+                "get_record",
+                {"collection": "brand_identities", "record_id": brand_id},
+            )
+            return parse_mcp_result(res)
+        except Exception as e:
+            logger.warning(f"Failed to fetch brand identity: {e}")
+            return {}, str(e)
+
+    async def fetch_customer_task(cust_id: str) -> Tuple[Dict[str, Any], str]:
+        try:
+            res = await execute_mcp_tool(
+                "get_record",
+                {"collection": "customer_personas", "record_id": cust_id},
+            )
+            return parse_mcp_result(res)
+        except Exception as e:
+            logger.warning(f"Failed to fetch customer profile: {e}")
+            return {}, str(e)
+
+    tasks_p3 = []
+    task_map_p3 = {}
+
+    # Check if we need to fetch Brand (fallback)
+    if not brand_data:
         brand_refs = worksheet.get("brandRefs", [])
         if brand_refs and len(brand_refs) > 0:
-            try:
-                result = await execute_mcp_tool(
-                    "get_record",
-                    {"collection": "brand_identities", "record_id": brand_refs[0]},
-                )
-                brand, err = parse_mcp_result(result)
-                context["brandIdentity"] = brand or {}
-                if err:
-                    errors["brandIdentity"] = err
-            except Exception as e:
-                logger.warning(f"Failed to fetch brand identity: {e}")
-                context["brandIdentity"] = {}
-                errors["brandIdentity"] = str(e)
+            tasks_p3.append(fetch_brand_task(brand_refs[0]))
+            task_map_p3["brandIdentity"] = len(tasks_p3) - 1
         else:
             context["brandIdentity"] = {}
 
-    # 5. Fetch Customer Profile from worksheet.customerRefs
-    worksheet = context.get("worksheet", {})
+    # Check if we need to fetch Customer Profile
     customer_refs = worksheet.get("customerRefs", [])
     if customer_refs and len(customer_refs) > 0:
-        try:
-            result = await execute_mcp_tool(
-                "get_record",
-                {"collection": "customer_personas", "record_id": customer_refs[0]},
-            )
-            profile, err = parse_mcp_result(result)
-            context["customerProfile"] = profile or {}
-            if err:
-                errors["customerProfile"] = err
-        except Exception as e:
-            logger.warning(f"Failed to fetch customer profile: {e}")
-            context["customerProfile"] = {}
-            errors["customerProfile"] = str(e)
+        tasks_p3.append(fetch_customer_task(customer_refs[0]))
+        task_map_p3["customerProfile"] = len(tasks_p3) - 1
     else:
         context["customerProfile"] = {}
+
+    if tasks_p3:
+        p3_results = await asyncio.gather(*tasks_p3)
+
+        if "brandIdentity" in task_map_p3:
+            brand, err = p3_results[task_map_p3["brandIdentity"]]
+            context["brandIdentity"] = brand or {}
+            if err:
+                errors["brandIdentity"] = err
+
+        if "customerProfile" in task_map_p3:
+            cust, err = p3_results[task_map_p3["customerProfile"]]
+            context["customerProfile"] = cust or {}
+            if err:
+                errors["customerProfile"] = err
 
     return context, errors
