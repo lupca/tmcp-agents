@@ -12,4 +12,5 @@ def get_ollama_llm(temperature: float = 0, model: str = "qwen3:4b-instruct-2507-
     from langchain_ollama import ChatOllama
 
     ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://192.168.1.6:11434")
-    return ChatOllama(model=model, temperature=temperature, base_url=ollama_base_url)
+    env_model = os.getenv("OLLAMA_MODEL", model)
+    return ChatOllama(model=env_model, temperature=temperature, base_url=ollama_base_url)
