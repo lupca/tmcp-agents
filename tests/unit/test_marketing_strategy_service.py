@@ -2,6 +2,7 @@ import sys
 import os
 import json
 import pytest
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -47,118 +48,209 @@ MOCK_STRATEGY = {
 }
 
 class TestMarketingStrategyService:
-    @pytest.mark.asyncio
-    async def test_successful_generation(self):
+    def test_successful_generation(self):
         """Full happy path: fetch 3 resources -> LLM -> JSON -> done."""
         
-        # Mock MCP results
-        mock_ws_result = MagicMock()
-        mock_ws_result.content = [MagicMock(text=json.dumps(MOCK_WORKSHEET))]
+        async def run_test():
+            # Mock MCP results
+            mock_ws_result = MagicMock()
+            mock_ws_result.content = [MagicMock(text=json.dumps(MOCK_WORKSHEET))]
+
+            mock_brand_result = MagicMock()
+            mock_brand_result.content = [MagicMock(text=json.dumps(MOCK_BRAND))]
+
+            mock_icp_result = MagicMock()
+            mock_icp_result.content = [MagicMock(text=json.dumps(MOCK_ICP))]
+
+            mock_product_result = MagicMock()
+            mock_product_result.content = [MagicMock(text=json.dumps({"name": "Product 1"}))]
+
+            # Mock execute_mcp_tool to return different things based on collection
+            async def mock_execute_mcp_tool(tool_name, args):
+                if tool_name != "get_record":
+                    raise ValueError(f"Expected tool 'get_record', got {tool_name}")
+                collection = args.get("collection")
+                if collection == "worksheets":
+                    return mock_ws_result
+                elif collection == "brand_identities":
+                    return mock_brand_result
+                elif collection == "customer_personas":
+                    return mock_icp_result
+                elif collection == "products_services":
+                    return mock_product_result
+                raise ValueError(f"Unexpected collection: {collection}")
+
+            # Mock LLM
+            mock_chunk = MagicMock()
+            mock_chunk.content = json.dumps(MOCK_STRATEGY)
+
+            async def mock_astream(*args, **kwargs):
+                yield mock_chunk
+
+            mock_llm = MagicMock()
+            mock_llm.astream = mock_astream
+
+            with patch("app.services.strategy.execute_mcp_tool", side_effect=mock_execute_mcp_tool), \
+                 patch("app.services.strategy.get_ollama_llm", return_value=mock_llm):
+
+                events = []
+                async for event in marketing_strategy_event_generator(
+                    worksheet_id="ws_1",
+                    campaign_type="awareness",
+                    product_id="prod_1",
+                    goal="Increase foot traffic",
+                    language="English"
+                ):
+                    events.append(event)
+
+                parsed = _collect_events(events)
+
+                # Check status progression
+                statuses = [e.get("status") for e in parsed if e["type"] == "status"]
+                assert "fetching_worksheet" in statuses
+                assert "fetching_brand" in statuses
+                assert "fetching_icp" in statuses
+                assert "analyzing" in statuses
+
+                # Check done event
+                done_event = next(e for e in parsed if e["type"] == "done")
+                strategy = done_event["marketingStrategy"]
+                assert strategy["positioning"] == MOCK_STRATEGY["positioning"]
         
-        mock_brand_result = MagicMock()
-        mock_brand_result.content = [MagicMock(text=json.dumps(MOCK_BRAND))]
-        
-        mock_icp_result = MagicMock()
-        mock_icp_result.content = [MagicMock(text=json.dumps(MOCK_ICP))]
+        asyncio.run(run_test())
 
-        mock_product_result = MagicMock()
-        mock_product_result.content = [MagicMock(text=json.dumps({"name": "Product 1"}))]
-
-        # Mock execute_mcp_tool to return different things based on collection
-        async def mock_execute_mcp_tool(tool_name, args):
-            if tool_name != "get_record":
-                raise ValueError(f"Expected tool 'get_record', got {tool_name}")
-            collection = args.get("collection")
-            if collection == "worksheets":
-                return mock_ws_result
-            elif collection == "brand_identities":
-                return mock_brand_result
-            elif collection == "customer_personas":
-                return mock_icp_result
-            elif collection == "products_services":
-                return mock_product_result
-            raise ValueError(f"Unexpected collection: {collection}")
-
-        # Mock LLM
-        mock_chunk = MagicMock()
-        mock_chunk.content = json.dumps(MOCK_STRATEGY)
-        
-        async def mock_astream(*args, **kwargs):
-            yield mock_chunk
-        
-        mock_llm = MagicMock()
-        mock_llm.astream = mock_astream
-
-        with patch("app.services.strategy.execute_mcp_tool", side_effect=mock_execute_mcp_tool), \
-             patch("app.services.strategy.get_ollama_llm", return_value=mock_llm):
-
-            events = []
-            async for event in marketing_strategy_event_generator(
-                worksheet_id="ws_1",
-                campaign_type="awareness",
-                product_id="prod_1",
-                goal="Increase foot traffic",
-                language="English"
-            ):
-                events.append(event)
-
-            parsed = _collect_events(events)
-            
-            # Check status progression
-            statuses = [e.get("status") for e in parsed if e["type"] == "status"]
-            assert "fetching_worksheet" in statuses
-            assert "fetching_brand" in statuses
-            assert "fetching_icp" in statuses
-            assert "analyzing" in statuses
-
-            # Check done event
-            done_event = next(e for e in parsed if e["type"] == "done")
-            strategy = done_event["marketingStrategy"]
-            assert strategy["positioning"] == MOCK_STRATEGY["positioning"]
-
-    @pytest.mark.asyncio
-    async def test_mcp_failure_handles_gracefully(self):
+    def test_mcp_failure_handles_gracefully(self):
         """If one MCP call fails, it should emit an error."""
-        with patch("app.services.strategy.execute_mcp_tool", side_effect=Exception("Database down")):
-            events = []
-            async for event in marketing_strategy_event_generator("ws", "awareness", "prod"):
-                events.append(event)
-            
-            parsed = _collect_events(events)
-            error = next(e for e in parsed if e["type"] == "error")
-            assert "Failed to fetch worksheet" in error["error"]
+        async def run_test():
+            with patch("app.services.strategy.execute_mcp_tool", side_effect=Exception("Database down")):
+                events = []
+                async for event in marketing_strategy_event_generator("ws", "awareness", "prod"):
+                    events.append(event)
 
-    @pytest.mark.asyncio
-    async def test_invalid_llm_json(self):
-        """If LLM returns bad JSON, emit error."""
-        # Setup successful MCP calls
-        mock_ws_result = MagicMock()
-        mock_ws_result.content = [MagicMock(text=json.dumps(MOCK_WORKSHEET))]
-        mock_brand_result = MagicMock()
-        mock_brand_result.content = [MagicMock(text=json.dumps(MOCK_BRAND))]
-        mock_icp_result = MagicMock()
-        mock_icp_result.content = [MagicMock(text=json.dumps(MOCK_ICP))]
-
-        async def mock_execute(*args, **kwargs):
-            return mock_ws_result # Simplified: return same structure for all, works for this test
-
-        # Setup Bad LLM response
-        mock_chunk = MagicMock()
-        mock_chunk.content = "Not JSON at all"
+                parsed = _collect_events(events)
+                error = next(e for e in parsed if e["type"] == "error")
+                assert "Failed to fetch worksheet" in error["error"]
         
-        async def mock_astream(*args, **kwargs):
-            yield mock_chunk
-            
-        mock_llm = MagicMock()
-        mock_llm.astream = mock_astream
+        asyncio.run(run_test())
 
-        with patch("app.services.strategy.execute_mcp_tool", return_value=mock_ws_result), \
-             patch("app.services.strategy.get_ollama_llm", return_value=mock_llm):
-             
-            events = []
-            async for event in marketing_strategy_event_generator("ws", "awareness", "prod"):
-                events.append(event)
+    def test_invalid_llm_json(self):
+        """If LLM returns bad JSON, emit error."""
+        async def run_test():
+            # Setup successful MCP calls
+            mock_ws_result = MagicMock()
+            mock_ws_result.content = [MagicMock(text=json.dumps(MOCK_WORKSHEET))]
+            mock_brand_result = MagicMock()
+            mock_brand_result.content = [MagicMock(text=json.dumps(MOCK_BRAND))]
+            mock_icp_result = MagicMock()
+            mock_icp_result.content = [MagicMock(text=json.dumps(MOCK_ICP))]
+
+            async def mock_execute(*args, **kwargs):
+                return mock_ws_result # Simplified: return same structure for all, works for this test
+
+            # Setup Bad LLM response
+            mock_chunk = MagicMock()
+            mock_chunk.content = "Not JSON at all"
+            
+            async def mock_astream(*args, **kwargs):
+                yield mock_chunk
+
+            mock_llm = MagicMock()
+            mock_llm.astream = mock_astream
+
+            with patch("app.services.strategy.execute_mcp_tool", return_value=mock_ws_result), \
+                 patch("app.services.strategy.get_ollama_llm", return_value=mock_llm):
+
+                events = []
+                async for event in marketing_strategy_event_generator("ws", "awareness", "prod"):
+                    events.append(event)
+
+                parsed = _collect_events(events)
+                error = next(e for e in parsed if e["type"] == "error")
+                assert "not valid JSON" in error["error"]
+
+        asyncio.run(run_test())
+
+    def test_brand_failure_handles_gracefully(self):
+        """If Brand fetch fails during parallel execution, it should emit an error."""
+        async def run_test():
+            # Mock MCP results
+            mock_ws_result = MagicMock()
+            mock_ws_result.content = [MagicMock(text=json.dumps(MOCK_WORKSHEET))]
+            
+            # Mock execute_mcp_tool to return different things based on collection
+            async def mock_execute_mcp_tool(tool_name, args):
+                collection = args.get("collection")
+                if collection == "worksheets":
+                    return mock_ws_result
+                elif collection == "brand_identities":
+                    raise Exception("Brand DB down")
+                elif collection == "customer_personas":
+                    # Even if this succeeds, the overall process should fail
+                    mock_icp_result = MagicMock()
+                    mock_icp_result.content = [MagicMock(text=json.dumps(MOCK_ICP))]
+                    return mock_icp_result
+                elif collection == "products_services":
+                    return MagicMock()
+                return MagicMock()
+
+            with patch("app.services.strategy.execute_mcp_tool", side_effect=mock_execute_mcp_tool):
+                events = []
+                async for event in marketing_strategy_event_generator("ws", "awareness", "prod"):
+                    events.append(event)
+
+                parsed = _collect_events(events)
+                error = next(e for e in parsed if e["type"] == "error")
+                assert "Failed to fetch brand identity" in error["error"]
+
+        asyncio.run(run_test())
+
+    def test_product_failure_is_ignored(self):
+        """If Product fetch fails, it should log but continue."""
+        async def run_test():
+            # Mock MCP results
+            mock_ws_result = MagicMock()
+            mock_ws_result.content = [MagicMock(text=json.dumps(MOCK_WORKSHEET))]
+            mock_brand_result = MagicMock()
+            mock_brand_result.content = [MagicMock(text=json.dumps(MOCK_BRAND))]
+            mock_icp_result = MagicMock()
+            mock_icp_result.content = [MagicMock(text=json.dumps(MOCK_ICP))]
+
+            async def mock_execute_mcp_tool(tool_name, args):
+                collection = args.get("collection")
+                if collection == "worksheets":
+                    return mock_ws_result
+                elif collection == "brand_identities":
+                    return mock_brand_result
+                elif collection == "customer_personas":
+                    return mock_icp_result
+                elif collection == "products_services":
+                    raise Exception("Product DB down")
+                return MagicMock()
+
+            # Mock LLM
+            mock_chunk = MagicMock()
+            mock_chunk.content = json.dumps(MOCK_STRATEGY)
+            async def mock_astream(*args, **kwargs):
+                yield mock_chunk
+            
+            mock_llm = MagicMock()
+            mock_llm.astream = mock_astream
+
+            with patch("app.services.strategy.execute_mcp_tool", side_effect=mock_execute_mcp_tool), \
+                 patch("app.services.strategy.get_ollama_llm", return_value=mock_llm):
+
+                events = []
+                async for event in marketing_strategy_event_generator("ws", "awareness", "prod"):
+                    events.append(event)
                 
-            parsed = _collect_events(events)
-            error = next(e for e in parsed if e["type"] == "error")
-            assert "not valid JSON" in error["error"]
+                parsed = _collect_events(events)
+
+                # Check that we got past fetching
+                statuses = [e.get("status") for e in parsed if e["type"] == "status"]
+                assert "analyzing" in statuses
+
+                # Check done event
+                done_event = next((e for e in parsed if e["type"] == "done"), None)
+                assert done_event is not None
+
+        asyncio.run(run_test())

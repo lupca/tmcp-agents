@@ -1,6 +1,6 @@
 import json
 import asyncio
-from typing import AsyncGenerator, Dict, Any
+from typing import AsyncGenerator
 
 from langchain_core.messages import SystemMessage, HumanMessage 
 from app.tools.mcp_bridge import execute_mcp_tool
@@ -54,38 +54,66 @@ async def marketing_strategy_event_generator(
             yield sse_event("error", error=f"Failed to fetch worksheet: {str(e)}")
             return
 
-        # 2. Fetch Brand Identity
+        # 2. Fetch Brand, ICP, and Product in parallel
         yield sse_event("status", status="fetching_brand", agent="MarketingStrategist")
-        try:
-            brand_result = await execute_mcp_tool("get_record", _mcp_args("brand_identities", brand_identity_id))
-            brand_data_raw = brand_result.content[0].text
-            brand_parsed = json.loads(brand_data_raw)
-        except Exception as e:
-            yield sse_event("error", error=f"Failed to fetch brand identity: {str(e)}")
-            return
-
-        # 3. Fetch Customer Profile
         yield sse_event("status", status="fetching_icp", agent="MarketingStrategist")
-        try:
-            icp_result = await execute_mcp_tool("get_record", _mcp_args("customer_personas", customer_profile_id))
-            icp_data_raw = icp_result.content[0].text
-            icp_parsed = json.loads(icp_data_raw)
-        except Exception as e:
-            yield sse_event("error", error=f"Failed to fetch customer profile: {str(e)}")
-            return
-
-        # 4. Fetch Product (Optional)
-        product_parsed = {}
         if product_id:
             yield sse_event("status", status="fetching_product", agent="MarketingStrategist")
-            try:
-                product_result = await execute_mcp_tool("get_record", _mcp_args("products_services", product_id))
-                product_data_raw = product_result.content[0].text
-                product_parsed = json.loads(product_data_raw)
-            except Exception as e:
-                # Non-fatal if product fetch fails, but log it or send error event.
-                # For now, we just skip product context if it fails.
-                print(f"Failed to fetch product: {str(e)}")
+
+        async def fetch_brand():
+            return await execute_mcp_tool("get_record", _mcp_args("brand_identities", brand_identity_id))
+
+        async def fetch_icp():
+            return await execute_mcp_tool("get_record", _mcp_args("customer_personas", customer_profile_id))
+
+        async def fetch_product():
+            return await execute_mcp_tool("get_record", _mcp_args("products_services", product_id))
+
+        tasks = [fetch_brand(), fetch_icp()]
+        if product_id:
+            tasks.append(fetch_product())
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        brand_result_or_exc = results[0]
+        icp_result_or_exc = results[1]
+        product_result_or_exc = results[2] if product_id else None
+
+        # Process Brand
+        if isinstance(brand_result_or_exc, Exception):
+            yield sse_event("error", error=f"Failed to fetch brand identity: {str(brand_result_or_exc)}")
+            return
+
+        try:
+            brand_data_raw = brand_result_or_exc.content[0].text
+            brand_parsed = json.loads(brand_data_raw)
+        except Exception as e:
+            yield sse_event("error", error=f"Failed to parse brand identity: {str(e)}")
+            return
+
+        # Process ICP
+        if isinstance(icp_result_or_exc, Exception):
+            yield sse_event("error", error=f"Failed to fetch customer profile: {str(icp_result_or_exc)}")
+            return
+
+        try:
+            icp_data_raw = icp_result_or_exc.content[0].text
+            icp_parsed = json.loads(icp_data_raw)
+        except Exception as e:
+            yield sse_event("error", error=f"Failed to parse customer profile: {str(e)}")
+            return
+
+        # Process Product
+        product_parsed = {}
+        if product_id:
+            if isinstance(product_result_or_exc, Exception):
+                print(f"Failed to fetch product: {str(product_result_or_exc)}")
+            else:
+                try:
+                    product_data_raw = product_result_or_exc.content[0].text
+                    product_parsed = json.loads(product_data_raw)
+                except Exception as e:
+                    print(f"Failed to parse product: {str(e)}")
 
         # --- Step 4: Build Prompt ---
         yield sse_event("status", status="analyzing", agent="MarketingStrategist")
