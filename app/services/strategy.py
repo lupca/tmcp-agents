@@ -1,6 +1,6 @@
 import json
 import asyncio
-from typing import AsyncGenerator, Dict, Any
+from typing import AsyncGenerator, Dict, Any, Optional
 
 from langchain_core.messages import SystemMessage, HumanMessage 
 from app.tools.mcp_bridge import execute_mcp_tool
@@ -31,7 +31,7 @@ async def marketing_strategy_event_generator(
                 args["auth_token"] = auth_token
             return args
 
-        # 1. Fetch Worksheet
+        # 1. Fetch Worksheet (Sequential, as we need IDs from it)
         yield sse_event("status", status="fetching_worksheet", agent="MarketingStrategist")
         try:
             ws_result = await execute_mcp_tool("get_record", _mcp_args("worksheets", worksheet_id))
@@ -54,38 +54,45 @@ async def marketing_strategy_event_generator(
             yield sse_event("error", error=f"Failed to fetch worksheet: {str(e)}")
             return
 
-        # 2. Fetch Brand Identity
+        # 2. Fetch Brand Identity, Customer Profile, and Product in Parallel
+        # We emit status events first so the UI knows what's happening
         yield sse_event("status", status="fetching_brand", agent="MarketingStrategist")
-        try:
-            brand_result = await execute_mcp_tool("get_record", _mcp_args("brand_identities", brand_identity_id))
-            brand_data_raw = brand_result.content[0].text
-            brand_parsed = json.loads(brand_data_raw)
-        except Exception as e:
-            yield sse_event("error", error=f"Failed to fetch brand identity: {str(e)}")
-            return
-
-        # 3. Fetch Customer Profile
         yield sse_event("status", status="fetching_icp", agent="MarketingStrategist")
-        try:
-            icp_result = await execute_mcp_tool("get_record", _mcp_args("customer_personas", customer_profile_id))
-            icp_data_raw = icp_result.content[0].text
-            icp_parsed = json.loads(icp_data_raw)
-        except Exception as e:
-            yield sse_event("error", error=f"Failed to fetch customer profile: {str(e)}")
-            return
-
-        # 4. Fetch Product (Optional)
-        product_parsed = {}
         if product_id:
             yield sse_event("status", status="fetching_product", agent="MarketingStrategist")
+
+        async def fetch_brand():
+            result = await execute_mcp_tool("get_record", _mcp_args("brand_identities", brand_identity_id))
+            return json.loads(result.content[0].text)
+
+        async def fetch_icp():
+            result = await execute_mcp_tool("get_record", _mcp_args("customer_personas", customer_profile_id))
+            return json.loads(result.content[0].text)
+
+        async def fetch_product():
+            if not product_id:
+                return {}
             try:
-                product_result = await execute_mcp_tool("get_record", _mcp_args("products_services", product_id))
-                product_data_raw = product_result.content[0].text
-                product_parsed = json.loads(product_data_raw)
+                result = await execute_mcp_tool("get_record", _mcp_args("products_services", product_id))
+                return json.loads(result.content[0].text)
             except Exception as e:
-                # Non-fatal if product fetch fails, but log it or send error event.
-                # For now, we just skip product context if it fails.
                 print(f"Failed to fetch product: {str(e)}")
+                return {}
+
+        try:
+            # Execute in parallel
+            brand_parsed, icp_parsed, product_parsed = await asyncio.gather(
+                fetch_brand(),
+                fetch_icp(),
+                fetch_product()
+            )
+        except Exception as e:
+            # If any of the critical fetches fail (Brand, ICP), we treat it as a fatal error.
+            # asyncio.gather raises the first exception encountered.
+            # We catch it here.
+            # Note: product fetch exception is caught inside fetch_product so it won't fail here unless something else breaks.
+            yield sse_event("error", error=f"Failed to fetch context: {str(e)}")
+            return
 
         # --- Step 4: Build Prompt ---
         yield sse_event("status", status="analyzing", agent="MarketingStrategist")
