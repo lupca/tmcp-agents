@@ -1,0 +1,3 @@
+## 2024-05-24 - Parallelizing MCP Context Fetches
+**Learning:** In the marketing strategy generation service (`app/services/strategy.py`), retrieving dependencies like Brand Identity, Customer Profile, and Product sequentially via MCP tools caused unnecessary latency. These fetches are independent after the initial Worksheet fetch and can be safely parallelized. Emitting SSE status events sequentially *before* `asyncio.gather` maintains the responsive UX while allowing the backend to fetch concurrently.
+**Action:** When gathering data from multiple MCP collections where dependencies don't require sequential execution, always use `asyncio.gather` with `return_exceptions=True` to fetch them in parallel, explicitly handling critical vs. optional errors afterward.
