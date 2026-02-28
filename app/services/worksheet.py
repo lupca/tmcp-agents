@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import json
 from typing import AsyncGenerator
@@ -29,27 +30,37 @@ async def worksheet_event_generator(
                 args["auth_token"] = auth_token
             return args
 
-        # Fetch Brands
-        brand_contexts = []
+        async def _fetch_context(collection: str, record_id: str):
+            res = await execute_mcp_tool("get_record", _mcp_args(collection, record_id))
+            return json.loads(res.content[0].text)
+
+        brand_tasks = []
         if brand_ids:
             yield sse_event("status", status="fetching_brands", agent="MarketingStrategist")
-            for bid in brand_ids:
-                try:
-                    res = await execute_mcp_tool("get_record", _mcp_args("brand_identities", bid))
-                    brand_contexts.append(json.loads(res.content[0].text))
-                except Exception as e:
-                    logger.warning(f"Failed to fetch brand {bid}: {e}")
+            brand_tasks = [_fetch_context("brand_identities", bid) for bid in brand_ids]
 
-        # Fetch Customers
-        customer_contexts = []
+        customer_tasks = []
         if customer_ids:
             yield sse_event("status", status="fetching_customers", agent="MarketingStrategist")
-            for cid in customer_ids:
-                try:
-                    res = await execute_mcp_tool("get_record", _mcp_args("customer_personas", cid))
-                    customer_contexts.append(json.loads(res.content[0].text))
-                except Exception as e:
-                    logger.warning(f"Failed to fetch customer {cid}: {e}")
+            customer_tasks = [_fetch_context("customer_personas", cid) for cid in customer_ids]
+
+        # Execute all fetches concurrently
+        all_tasks = brand_tasks + customer_tasks
+        results = await asyncio.gather(*all_tasks, return_exceptions=True)
+
+        brand_contexts = []
+        for i, result in enumerate(results[:len(brand_tasks)]):
+            if isinstance(result, Exception):
+                logger.warning(f"Failed to fetch brand {brand_ids[i]}: {result}")
+            else:
+                brand_contexts.append(result)
+
+        customer_contexts = []
+        for i, result in enumerate(results[len(brand_tasks):]):
+            if isinstance(result, Exception):
+                logger.warning(f"Failed to fetch customer {customer_ids[i]}: {result}")
+            else:
+                customer_contexts.append(result)
 
         yield sse_event("status", status="thinking", agent="MarketingStrategist")
 
