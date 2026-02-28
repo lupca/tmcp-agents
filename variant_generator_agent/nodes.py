@@ -1,7 +1,7 @@
 import json
 import logging
-from typing import Dict, Any, List
-from datetime import datetime
+import asyncio
+from typing import Dict, Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
@@ -66,21 +66,15 @@ async def retriever_node(state: VariantGeneratorState) -> Dict[str, Any]:
     }
 
 
-async def generator_node(state: VariantGeneratorState) -> Dict[str, Any]:
+async def _generate_single_variant(
+    platform: str,
+    context: Dict[str, Any],
+    language: str,
+    max_retries: int = 2
+) -> Dict[str, Any]:
     """
-    Generator (G): Generates a variant for the current platform.
-    Processes one platform at a time; the graph loops back for the next.
+    Helper to generate a variant for a single platform with retry logic.
     """
-    platforms = state.get("platforms", [])
-    idx = state.get("current_platform_index", 0)
-    platform = platforms[idx]
-
-    print(f"--- [G] Variant Generator Node — Platform: {platform} ---")
-
-    context = state.get("context_data", {})
-    language = state.get("language", "Vietnamese")
-    feedback = state.get("feedback", "")
-
     mc = context.get("masterContent", {})
     brand = context.get("brandIdentity", {})
     persona = context.get("customerProfile", {})
@@ -114,7 +108,8 @@ async def generator_node(state: VariantGeneratorState) -> Dict[str, Any]:
             return ", ".join(str(v) for v in val)
         return str(val) if val else ""
 
-    prompt_text = PLATFORM_VARIANT_GENERATOR_PROMPT.format(
+    # Construct base prompt
+    base_prompt_text = PLATFORM_VARIANT_GENERATOR_PROMPT.format(
         platform=platform.capitalize(),
         core_message=core_message,
         extended_message=extended_message,
@@ -129,92 +124,116 @@ async def generator_node(state: VariantGeneratorState) -> Dict[str, Any]:
         content_format=content_format,
     )
 
-    if feedback and "RETRY" in feedback.upper():
-        prompt_text += f"\n\n**Previous feedback (please address this):** {feedback}"
+    feedback = ""
 
-    response = await llm.ainvoke([
-        SystemMessage(content=prompt_text),
-        HumanMessage(content=f"Generate the {platform} variant now."),
-    ])
+    for attempt in range(max_retries + 1):
+        prompt_text = base_prompt_text
+        if feedback:
+            prompt_text += f"\n\n**Previous attempt issue (please address this):** {feedback}"
 
-    try:
-        variant_json = parse_json_response(response.content)
-        variant_json["_platform"] = platform
-        return {"current_variant": variant_json}
-    except ValueError as e:
-        logger.error(f"JSON parsing failed for {platform}: {e}")
-        return {
-            "current_variant": {
-                "raw_text": response.content,
-                "_parse_error": True,
-                "_platform": platform,
-            }
-        }
+        try:
+            # We call invoke here. If parallelized via gather, these run concurrently.
+            response = await llm.ainvoke([
+                SystemMessage(content=prompt_text),
+                HumanMessage(content=f"Generate the {platform} variant now."),
+            ])
+
+            try:
+                variant_json = parse_json_response(response.content)
+            except ValueError as e:
+                feedback = f"Output was not valid JSON: {e}. Please output ONLY valid JSON."
+                if attempt < max_retries:
+                    continue
+                else:
+                    return {
+                        "raw_text": response.content,
+                        "_parse_error": True,
+                        "_platform": platform,
+                        "error": str(e)
+                    }
+
+            variant_json["_platform"] = platform
+
+            # Validation logic (migrated from evaluator_node)
+            adapted_copy = variant_json.get("adapted_copy", "")
+            if not adapted_copy or len(adapted_copy) < 10:
+                feedback = "adapted_copy is missing or too short. Provide more content."
+                if attempt < max_retries:
+                    continue
+                else:
+                    # Return what we have but mark as potentially poor quality
+                    variant_json["_warning"] = "Content too short"
+                    return variant_json
+
+            # If we got here, it's valid
+            return variant_json
+
+        except Exception as e:
+            logger.error(f"Error generating {platform} variant (attempt {attempt}): {e}")
+            feedback = f"System error: {e}"
+            if attempt == max_retries:
+                 return {
+                    "_platform": platform,
+                    "error": str(e),
+                    "_parse_error": True
+                }
+
+    return {
+        "_platform": platform,
+        "error": "Max retries exceeded",
+        "last_feedback": feedback
+    }
+
+
+async def generator_node(state: VariantGeneratorState) -> Dict[str, Any]:
+    """
+    Generator (G): Generates variants for ALL platforms in parallel.
+    Internalizes the retry loop for efficiency.
+    """
+    platforms = state.get("platforms", [])
+    print(f"--- [G] Variant Generator Node — Platforms: {', '.join(platforms)} ---")
+
+    context = state.get("context_data", {})
+    language = state.get("language", "Vietnamese")
+
+    # Launch parallel generation tasks
+    tasks = [
+        _generate_single_variant(platform, context, language)
+        for platform in platforms
+    ]
+
+    results = await asyncio.gather(*tasks)
+
+    return {
+        "generated_variants": results,
+        "current_variant": None, # Clear this as we are done
+    }
 
 
 async def evaluator_node(state: VariantGeneratorState) -> Dict[str, Any]:
     """
-    Evaluator (E): Evaluates context or a generated variant.
-    Routes to Generator, NextPlatform, or FINISH.
+    Evaluator (E): Evaluates context availability only.
+    Routes to Generator or FINISH.
     """
-    print("--- [E] Variant Evaluator Node ---")
+    print("--- [E] Variant Evaluator Node (Context Check) ---")
 
-    current_variant = state.get("current_variant")
     context_data = state.get("context_data", {})
-    platforms = state.get("platforms", [])
-    idx = state.get("current_platform_index", 0)
 
-    # 1. Context evaluation (before any generation)
-    if current_variant is None:
-        mc = context_data.get("masterContent", {})
-        retrieval_errors = context_data.get("_errors", {})
-        if not mc:
-            mc_err = retrieval_errors.get("masterContent", "")
-            detail = f" Detail: {mc_err}" if mc_err else ""
-            return {
-                "next_node": "FINISH",
-                "feedback": f"CRITICAL: Master content not found (id={state.get('master_content_id', '?')}).{detail}",
-            }
+    # Context evaluation
+    mc = context_data.get("masterContent", {})
+    retrieval_errors = context_data.get("_errors", {})
+    if not mc:
+        mc_err = retrieval_errors.get("masterContent", "")
+        detail = f" Detail: {mc_err}" if mc_err else ""
         return {
-            "next_node": "Generator",
-            "feedback": "Context OK. Proceeding to variant generation.",
-        }
-
-    # 2. Evaluate the generated variant
-    if isinstance(current_variant, dict) and current_variant.get("_parse_error"):
-        return {
-            "next_node": "Generator",
-            "feedback": "RETRY: Output was not valid JSON. Please output ONLY valid JSON.",
-        }
-
-    adapted_copy = current_variant.get("adapted_copy", "")
-    if not adapted_copy or len(adapted_copy) < 10:
-        return {
-            "next_node": "Generator",
-            "feedback": "RETRY: adapted_copy is missing or too short. Provide more content.",
-        }
-
-    # Variant is OK — accumulate and move to next platform
-    accumulated = list(state.get("generated_variants", []))
-    accumulated.append(current_variant)
-    next_idx = idx + 1
-
-    if next_idx < len(platforms):
-        return {
-            "generated_variants": accumulated,
-            "current_variant": None,
-            "current_platform_index": next_idx,
-            "next_node": "Generator",
-            "feedback": f"Platform '{current_variant.get('_platform')}' approved. Moving to next platform.",
-        }
-    else:
-        # All platforms done
-        return {
-            "generated_variants": accumulated,
-            "current_variant": None,
             "next_node": "FINISH",
-            "feedback": "APPROVED: All platform variants generated successfully.",
+            "feedback": f"CRITICAL: Master content not found (id={state.get('master_content_id', '?')}).{detail}",
         }
+
+    return {
+        "next_node": "Generator",
+        "feedback": "Context OK. Proceeding to variant generation.",
+    }
 
 
 async def saver_node(state: VariantGeneratorState) -> Dict[str, Any]:
@@ -236,8 +255,7 @@ async def saver_node(state: VariantGeneratorState) -> Dict[str, Any]:
         except (json.JSONDecodeError, TypeError):
             media_ids = []
 
-    # Dead persistence logic removed: created_ids and record_data were unused
-    # If auto-save is needed in the future, reintroduce with a feature flag and enable the save logic.
+    # Dead persistence logic removed
         
     return {
         "messages": [
