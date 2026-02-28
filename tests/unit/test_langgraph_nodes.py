@@ -87,22 +87,26 @@ async def test_run_node_agent_with_tool_call():
 
 # --- Test supervisor_node ---
 
-def test_supervisor_node_routing():
+@pytest.mark.asyncio
+async def test_supervisor_node_routing():
     # Test routing to Strategist
     state = MarketingState(messages=[], next="")
+    config = RunnableConfig(configurable={"thread_id": "1"})
     
-    # supervisor_chain.invoke(state) returns a message with agent name
+    # supervisor_chain.ainvoke(state, config) returns a message with agent name
     with patch("marketing_team.nodes.supervisor_chain") as mock_chain:
-        mock_chain.invoke.return_value = AIMessage(content="Strategist")
+        # We must use AsyncMock for async methods
+        mock_chain.ainvoke = AsyncMock(return_value=AIMessage(content="Strategist"))
         
-        result = supervisor_node(state)
+        result = await supervisor_node(state, config)
         assert result["next"] == "Strategist"
+        mock_chain.ainvoke.assert_awaited_once()
         
     # Test routing to FINISH
     with patch("marketing_team.nodes.supervisor_chain") as mock_chain:
-        mock_chain.invoke.return_value = AIMessage(content="FINISH")
+        mock_chain.ainvoke = AsyncMock(return_value=AIMessage(content="FINISH"))
         
-        result = supervisor_node(state)
+        result = await supervisor_node(state, config)
         assert "FINISH" in result["next"] or result["next"] == "FINISH"
 
 # --- Test specific node (Strategist) ---
