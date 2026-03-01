@@ -1,5 +1,5 @@
 from typing import Dict, Any
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+from langchain_core.messages import HumanMessage
 from langchain_ollama import ChatOllama
 
 from .state import SocialMediaState

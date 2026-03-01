@@ -1,7 +1,7 @@
 
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from unittest.mock import AsyncMock, patch
+from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.runnables import RunnableConfig
 from marketing_team.state import MarketingState
 from marketing_team.nodes import (

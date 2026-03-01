@@ -5,7 +5,7 @@ import json
 from unittest.mock import MagicMock, patch
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from tests.unit.test_marketing_strategy_service import TestMarketingStrategyService, _collect_events, MOCK_WORKSHEET, MOCK_BRAND, MOCK_ICP, MOCK_STRATEGY
+from tests.unit.test_marketing_strategy_service import _collect_events, MOCK_WORKSHEET, MOCK_BRAND, MOCK_ICP, MOCK_STRATEGY
 from app.services.strategy import marketing_strategy_event_generator
 
 async def main():

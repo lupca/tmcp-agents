@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import patch, AsyncMock
+from unittest.mock import patch
 from app.services.context_fetcher import fetch_campaign_context
 import json
 

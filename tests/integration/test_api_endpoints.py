@@ -1,6 +1,5 @@
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 # Helper function to create an async generator for mocking

@@ -1,8 +1,6 @@
 
-import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
-from app.models.schemas import ChatRequest
+from unittest.mock import patch
+from langchain_core.messages import HumanMessage, AIMessage
 from marketing_team.state import MarketingState
 from marketing_team.nodes import supervisor_node
 

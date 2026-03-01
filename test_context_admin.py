@@ -1,5 +1,4 @@
 import asyncio
-import os
 from pocketbase import PocketBase
 
 async def test():
