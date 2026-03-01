@@ -1,7 +1,7 @@
 import asyncio
 import json
 from app.services.context_fetcher import fetch_campaign_context
-from app.tools.mcp_bridge import auth_token_var, execute_mcp_tool, parse_mcp_result
+from app.tools.mcp_bridge import auth_token_var
 
 async def main():
     auth_token_var.set("")

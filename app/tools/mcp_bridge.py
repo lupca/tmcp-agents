@@ -1,10 +1,7 @@
 import os
-import asyncio
 import json
-from typing import Any, Dict, List, Optional, Tuple
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
-from contextlib import AsyncExitStack
+from typing import Any, Dict, Optional, Tuple
+from mcp import ClientSession
 
 # Helper to run a tool via SSE
 from mcp.client.sse import sse_client
@@ -76,7 +73,6 @@ async def get_record(collection: str, record_id: str) -> str:
     result = await execute_mcp_tool("get_record", {"collection": collection, "record_id": record_id})
     return result.content[0].text
 
-import json
 
 @tool
 async def create_record(collection: str, data_json: str | dict) -> str:

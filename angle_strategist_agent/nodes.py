@@ -1,11 +1,9 @@
-import json
 import logging
 from typing import Dict, Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.core.llm_factory import get_ollama_llm
-from app.tools.mcp_bridge import execute_mcp_tool, parse_mcp_result
 from app.services.context_fetcher import fetch_campaign_context
 from app.utils.llm import parse_json_response
 from app.prompts import ANGLE_STRATEGIST_PROMPT

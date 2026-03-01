@@ -1,5 +1,4 @@
 import asyncio
-import json
 from app.tools.mcp_bridge import auth_token_var, execute_mcp_tool, parse_mcp_result
 
 async def main():

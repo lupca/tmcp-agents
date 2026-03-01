@@ -2,12 +2,11 @@ import sys
 import os
 import json
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from app.services.strategy import marketing_strategy_event_generator
-from app.utils.llm import parse_json_response
 
 def _collect_events(raw_events):
     """Parse SSE event strings into dicts."""

@@ -1,4 +1,3 @@
-import pytest
 from app.utils.state_factory import StateFactory
 from langchain_core.messages import HumanMessage
 

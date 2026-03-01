@@ -1,7 +1,7 @@
 
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
-from app.tools.mcp_bridge import list_collections, get_record, create_record, execute_mcp_tool
+from unittest.mock import patch
+from app.tools.mcp_bridge import list_collections, create_record, execute_mcp_tool
 
 # Mock basic MCP Types
 class MockTextContent:

@@ -2,10 +2,8 @@
 Unit tests for Variant Generator Agent nodes with auto-save disabled
 """
 import pytest
-import json
-from unittest.mock import AsyncMock, MagicMock, patch
-from langchain_core.messages import HumanMessage
-from variant_generator_agent.nodes import saver_node, generator_node, evaluator_node
+from unittest.mock import patch
+from variant_generator_agent.nodes import saver_node, evaluator_node
 from variant_generator_agent.state import VariantGeneratorState
 
 

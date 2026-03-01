@@ -1,4 +1,4 @@
-from typing import Annotated, List, TypedDict, Union
+from typing import Annotated, List, TypedDict
 from langgraph.graph.message import add_messages
 
 class MarketingState(TypedDict):
