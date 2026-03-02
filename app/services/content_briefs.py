@@ -89,6 +89,34 @@ async def _generate_briefs_for_stage(
             return {"stage": stage, "error": str(e), "angles": []}
 
 
+async def _save_single_brief(angle: dict, stage: str, workspace_id: str, campaign_id: str) -> int:
+    """Helper to save a single brief. Returns 1 on success, 0 on failure."""
+    try:
+        record_data = {
+            "collection": "content_briefs",
+            "data": {
+                "workspace_id": workspace_id,
+                "campaign_id": campaign_id,
+                "angle_name": angle.get("angle_name", "Untitled"),
+                "funnel_stage": stage,
+                "psychological_angle": angle.get("psychological_angle", "Logic"),
+                "pain_point_focus": angle.get("pain_point_focus", ""),
+                "key_message_variation": angle.get("key_message_variation", ""),
+                "call_to_action_direction": angle.get("call_to_action_direction", ""),
+                "brief": angle.get("brief", ""),
+            },
+        }
+        save_result = await execute_mcp_tool("create_record", record_data)
+        _, save_err = parse_mcp_result(save_result)
+        if save_err:
+            logger.warning(f"Failed to save brief: {save_err}")
+            return 0
+        return 1
+    except Exception as e:
+        logger.warning(f"Failed to save brief for {stage}: {e}")
+        return 0
+
+
 async def content_briefs_event_generator(
     campaign_id: str,
     workspace_id: str,
@@ -147,30 +175,12 @@ async def content_briefs_event_generator(
             yield sse_event("status", status="active", agent="ContentBriefs",
                             step=f"Saving {len(angles)} briefs for {stage}...")
 
-            for angle in angles:
-                try:
-                    record_data = {
-                        "collection": "content_briefs",
-                        "data": {
-                            "workspace_id": workspace_id,
-                            "campaign_id": campaign_id,
-                            "angle_name": angle.get("angle_name", "Untitled"),
-                            "funnel_stage": stage,
-                            "psychological_angle": angle.get("psychological_angle", "Logic"),
-                            "pain_point_focus": angle.get("pain_point_focus", ""),
-                            "key_message_variation": angle.get("key_message_variation", ""),
-                            "call_to_action_direction": angle.get("call_to_action_direction", ""),
-                            "brief": angle.get("brief", ""),
-                        },
-                    }
-                    save_result = await execute_mcp_tool("create_record", record_data)
-                    _, save_err = parse_mcp_result(save_result)
-                    if save_err:
-                        logger.warning(f"Failed to save brief: {save_err}")
-                    else:
-                        total_created += 1
-                except Exception as e:
-                    logger.warning(f"Failed to save brief for {stage}: {e}")
+            save_tasks = [
+                _save_single_brief(angle, stage, workspace_id, campaign_id)
+                for angle in angles
+            ]
+            save_results = await asyncio.gather(*save_tasks)
+            total_created += sum(save_results)
 
         # Step 4: Done
         if stage_errors:
