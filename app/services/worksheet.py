@@ -1,5 +1,6 @@
 import logging
 import json
+import asyncio
 from typing import AsyncGenerator
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -29,27 +30,31 @@ async def worksheet_event_generator(
                 args["auth_token"] = auth_token
             return args
 
-        # Fetch Brands
+        async def _async_fetch(collection: str, record_id: str) -> dict:
+            result = await execute_mcp_tool("get_record", _mcp_args(collection, record_id))
+            return json.loads(result.content[0].text)
+
         brand_contexts = []
         if brand_ids:
             yield sse_event("status", status="fetching_brands", agent="MarketingStrategist")
-            for bid in brand_ids:
-                try:
-                    res = await execute_mcp_tool("get_record", _mcp_args("brand_identities", bid))
-                    brand_contexts.append(json.loads(res.content[0].text))
-                except Exception as e:
-                    logger.warning(f"Failed to fetch brand {bid}: {e}")
+            brand_tasks = [_async_fetch("brand_identities", bid) for bid in brand_ids]
+            brand_results = await asyncio.gather(*brand_tasks, return_exceptions=True)
+            for bid, res in zip(brand_ids, brand_results):
+                if isinstance(res, Exception):
+                    logger.warning(f"Failed to fetch brand {bid}: {res}")
+                else:
+                    brand_contexts.append(res)
 
-        # Fetch Customers
         customer_contexts = []
         if customer_ids:
             yield sse_event("status", status="fetching_customers", agent="MarketingStrategist")
-            for cid in customer_ids:
-                try:
-                    res = await execute_mcp_tool("get_record", _mcp_args("customer_personas", cid))
-                    customer_contexts.append(json.loads(res.content[0].text))
-                except Exception as e:
-                    logger.warning(f"Failed to fetch customer {cid}: {e}")
+            customer_tasks = [_async_fetch("customer_personas", cid) for cid in customer_ids]
+            customer_results = await asyncio.gather(*customer_tasks, return_exceptions=True)
+            for cid, res in zip(customer_ids, customer_results):
+                if isinstance(res, Exception):
+                    logger.warning(f"Failed to fetch customer {cid}: {res}")
+                else:
+                    customer_contexts.append(res)
 
         yield sse_event("status", status="thinking", agent="MarketingStrategist")
 
