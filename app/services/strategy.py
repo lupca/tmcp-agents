@@ -1,6 +1,6 @@
 import json
 import asyncio
-from typing import AsyncGenerator, Dict, Any
+from typing import AsyncGenerator
 
 from langchain_core.messages import SystemMessage, HumanMessage 
 from app.tools.mcp_bridge import execute_mcp_tool
@@ -54,38 +54,45 @@ async def marketing_strategy_event_generator(
             yield sse_event("error", error=f"Failed to fetch worksheet: {str(e)}")
             return
 
-        # 2. Fetch Brand Identity
+        # Emit intent events first
         yield sse_event("status", status="fetching_brand", agent="MarketingStrategist")
-        try:
-            brand_result = await execute_mcp_tool("get_record", _mcp_args("brand_identities", brand_identity_id))
-            brand_data_raw = brand_result.content[0].text
-            brand_parsed = json.loads(brand_data_raw)
-        except Exception as e:
-            yield sse_event("error", error=f"Failed to fetch brand identity: {str(e)}")
-            return
-
-        # 3. Fetch Customer Profile
         yield sse_event("status", status="fetching_icp", agent="MarketingStrategist")
-        try:
-            icp_result = await execute_mcp_tool("get_record", _mcp_args("customer_personas", customer_profile_id))
-            icp_data_raw = icp_result.content[0].text
-            icp_parsed = json.loads(icp_data_raw)
-        except Exception as e:
-            yield sse_event("error", error=f"Failed to fetch customer profile: {str(e)}")
-            return
-
-        # 4. Fetch Product (Optional)
-        product_parsed = {}
         if product_id:
             yield sse_event("status", status="fetching_product", agent="MarketingStrategist")
-            try:
-                product_result = await execute_mcp_tool("get_record", _mcp_args("products_services", product_id))
-                product_data_raw = product_result.content[0].text
-                product_parsed = json.loads(product_data_raw)
-            except Exception as e:
-                # Non-fatal if product fetch fails, but log it or send error event.
-                # For now, we just skip product context if it fails.
-                print(f"Failed to fetch product: {str(e)}")
+
+        # 2-4. Fetch Brand Identity, Customer Profile, and Product concurrently
+        async def fetch_record(collection, record_id):
+            if not record_id:
+                return {}
+            res = await execute_mcp_tool("get_record", _mcp_args(collection, record_id))
+            return json.loads(res.content[0].text)
+
+        tasks = [
+            fetch_record("brand_identities", brand_identity_id),
+            fetch_record("customer_personas", customer_profile_id),
+            fetch_record("products_services", product_id) if product_id else asyncio.sleep(0)
+        ]
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Handle Brand
+        if isinstance(results[0], Exception):
+            yield sse_event("error", error=f"Failed to fetch brand identity: {str(results[0])}")
+            return
+        brand_parsed = results[0]
+
+        # Handle ICP
+        if isinstance(results[1], Exception):
+            yield sse_event("error", error=f"Failed to fetch customer profile: {str(results[1])}")
+            return
+        icp_parsed = results[1]
+
+        # Handle Product (Optional)
+        product_parsed = {}
+        if isinstance(results[2], Exception):
+            print(f"Failed to fetch product: {str(results[2])}")
+        elif results[2] is not None:
+            product_parsed = results[2]
 
         # --- Step 4: Build Prompt ---
         yield sse_event("status", status="analyzing", agent="MarketingStrategist")
