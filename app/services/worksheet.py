@@ -1,5 +1,6 @@
 import logging
 import json
+import asyncio
 from typing import AsyncGenerator
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -29,27 +30,40 @@ async def worksheet_event_generator(
                 args["auth_token"] = auth_token
             return args
 
-        # Fetch Brands
-        brand_contexts = []
+        # Emit intent events first
         if brand_ids:
             yield sse_event("status", status="fetching_brands", agent="MarketingStrategist")
-            for bid in brand_ids:
-                try:
-                    res = await execute_mcp_tool("get_record", _mcp_args("brand_identities", bid))
-                    brand_contexts.append(json.loads(res.content[0].text))
-                except Exception as e:
-                    logger.warning(f"Failed to fetch brand {bid}: {e}")
-
-        # Fetch Customers
-        customer_contexts = []
         if customer_ids:
             yield sse_event("status", status="fetching_customers", agent="MarketingStrategist")
-            for cid in customer_ids:
-                try:
-                    res = await execute_mcp_tool("get_record", _mcp_args("customer_personas", cid))
-                    customer_contexts.append(json.loads(res.content[0].text))
-                except Exception as e:
-                    logger.warning(f"Failed to fetch customer {cid}: {e}")
+
+        async def fetch_record(collection, record_id):
+            res = await execute_mcp_tool("get_record", _mcp_args(collection, record_id))
+            return json.loads(res.content[0].text)
+
+        # Build fetch tasks for both Brands and Customers
+        brand_tasks = [fetch_record("brand_identities", bid) for bid in brand_ids] if brand_ids else []
+        customer_tasks = [fetch_record("customer_personas", cid) for cid in customer_ids] if customer_ids else []
+
+        all_tasks = brand_tasks + customer_tasks
+        all_results = await asyncio.gather(*all_tasks, return_exceptions=True) if all_tasks else []
+
+        brand_contexts = []
+        customer_contexts = []
+
+        # Split results back into brands and customers based on lengths
+        num_brands = len(brand_tasks)
+
+        for i, result in enumerate(all_results):
+            if isinstance(result, Exception):
+                is_brand = i < num_brands
+                entity_id = brand_ids[i] if is_brand else customer_ids[i - num_brands]
+                entity_type = "brand" if is_brand else "customer"
+                logger.warning(f"Failed to fetch {entity_type} {entity_id}: {result}")
+            else:
+                if i < num_brands:
+                    brand_contexts.append(result)
+                else:
+                    customer_contexts.append(result)
 
         yield sse_event("status", status="thinking", agent="MarketingStrategist")
 
