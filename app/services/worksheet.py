@@ -23,33 +23,42 @@ async def worksheet_event_generator(
     Generates SSE events for worksheet creation using a direct LLM call.
     """
     try:
+        import asyncio
+
         def _mcp_args(collection: str, record_id: str) -> dict:
             args = {"collection": collection, "record_id": record_id}
             if auth_token:
                 args["auth_token"] = auth_token
             return args
 
-        # Fetch Brands
+        async def _fetch_record(collection: str, record_id: str, label: str) -> dict | None:
+            """Helper to fetch a single record via MCP and parse it."""
+            try:
+                res = await execute_mcp_tool("get_record", _mcp_args(collection, record_id))
+                return json.loads(res.content[0].text)
+            except Exception as e:
+                logger.warning(f"Failed to fetch {label} {record_id}: {e}")
+                return None
+
+        # Fetch Brands and Customers
+        # ⚡ Bolt Optimization: Use asyncio.gather to resolve N+1 queries.
+        # This executes all MCP tool calls concurrently instead of sequentially,
+        # reducing network latency from O(N+M) to O(1).
         brand_contexts = []
         if brand_ids:
             yield sse_event("status", status="fetching_brands", agent="MarketingStrategist")
-            for bid in brand_ids:
-                try:
-                    res = await execute_mcp_tool("get_record", _mcp_args("brand_identities", bid))
-                    brand_contexts.append(json.loads(res.content[0].text))
-                except Exception as e:
-                    logger.warning(f"Failed to fetch brand {bid}: {e}")
+            brand_results = await asyncio.gather(
+                *[_fetch_record("brand_identities", bid, "brand") for bid in brand_ids]
+            )
+            brand_contexts = [b for b in brand_results if b is not None]
 
-        # Fetch Customers
         customer_contexts = []
         if customer_ids:
             yield sse_event("status", status="fetching_customers", agent="MarketingStrategist")
-            for cid in customer_ids:
-                try:
-                    res = await execute_mcp_tool("get_record", _mcp_args("customer_personas", cid))
-                    customer_contexts.append(json.loads(res.content[0].text))
-                except Exception as e:
-                    logger.warning(f"Failed to fetch customer {cid}: {e}")
+            customer_results = await asyncio.gather(
+                *[_fetch_record("customer_personas", cid, "customer") for cid in customer_ids]
+            )
+            customer_contexts = [c for c in customer_results if c is not None]
 
         yield sse_event("status", status="thinking", agent="MarketingStrategist")
 
