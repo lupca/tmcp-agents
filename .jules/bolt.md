@@ -1,0 +1,3 @@
+## 2024-03-06 - Optimizing MCP Tool Calls in SSE Generators
+**Learning:** Extracting single-record MCP tool calls into helper coroutines and parallelizing them with `asyncio.gather` effectively resolves N+1 query bottlenecks in sequential generator logic, while still maintaining the proper chronological dispatch of UI status events (yielding all 'status' events *before* the gather call).
+**Action:** When working with multiple remote fetches in LangGraph or generator setups, look for `for` loops making `await` calls. Convert them to helper async functions and execute them in parallel using `asyncio.gather` for a massive latency reduction.
