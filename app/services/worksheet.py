@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import json
 from typing import AsyncGenerator
@@ -33,23 +34,33 @@ async def worksheet_event_generator(
         brand_contexts = []
         if brand_ids:
             yield sse_event("status", status="fetching_brands", agent="MarketingStrategist")
-            for bid in brand_ids:
+
+            async def _fetch_brand(bid):
                 try:
                     res = await execute_mcp_tool("get_record", _mcp_args("brand_identities", bid))
-                    brand_contexts.append(json.loads(res.content[0].text))
+                    return json.loads(res.content[0].text)
                 except Exception as e:
                     logger.warning(f"Failed to fetch brand {bid}: {e}")
+                    return None
+
+            results = await asyncio.gather(*[_fetch_brand(bid) for bid in brand_ids])
+            brand_contexts = [r for r in results if r is not None]
 
         # Fetch Customers
         customer_contexts = []
         if customer_ids:
             yield sse_event("status", status="fetching_customers", agent="MarketingStrategist")
-            for cid in customer_ids:
+
+            async def _fetch_customer(cid):
                 try:
                     res = await execute_mcp_tool("get_record", _mcp_args("customer_personas", cid))
-                    customer_contexts.append(json.loads(res.content[0].text))
+                    return json.loads(res.content[0].text)
                 except Exception as e:
                     logger.warning(f"Failed to fetch customer {cid}: {e}")
+                    return None
+
+            results = await asyncio.gather(*[_fetch_customer(cid) for cid in customer_ids])
+            customer_contexts = [r for r in results if r is not None]
 
         yield sse_event("status", status="thinking", agent="MarketingStrategist")
 
