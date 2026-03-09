@@ -1,0 +1,3 @@
+## 2024-05-18 - [Optimizing Parallel Data Fetches]
+**Learning:** Utilizing `asyncio.gather` with `return_exceptions=True` is an effective pattern for handling mixed critical and optional parallel tasks. It allows us to explicitly handle errors based on severity without crashing the entire operation, which is critical when we're gathering contextual data for LLM generations where some data (like product details) might be missing but shouldn't fail the entire prompt generation.
+**Action:** When parallelizing operations where some failures are critical (should halt operation) and some are optional (should gracefully degrade), always use `return_exceptions=True` and manually iterate over the results to apply the appropriate error handling logic to each task.
