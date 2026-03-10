@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Dict, Any, Tuple
 
@@ -45,38 +46,34 @@ async def fetch_campaign_context(campaign_id: str) -> Tuple[Dict[str, Any], Dict
     campaign_data = context.get("campaign", {})
     expand = campaign_data.get("expand", {})
 
-    # 2. Extract Worksheet from expand or fetch separately
     worksheet_data = expand.get("worksheet_id")
-    if worksheet_data:
-        context["worksheet"] = worksheet_data
-    else:
-        worksheet_id = campaign_data.get("worksheet_id")
+    worksheet_id = campaign_data.get("worksheet_id") if not worksheet_data else None
+
+    product_data = expand.get("product_id")
+    product_id = campaign_data.get("product_id") if not product_data else None
+
+    # PHASE 1: Fetch Worksheet & Product concurrently
+    async def fetch_ws():
+        if worksheet_data:
+            return worksheet_data, ""
         if worksheet_id:
             try:
-                result = await execute_mcp_tool(
-                    "get_record",
-                    {"collection": "worksheets", "record_id": worksheet_id},
+                res = await execute_mcp_tool(
+                    "get_record", {"collection": "worksheets", "record_id": worksheet_id}
                 )
-                ws, err = parse_mcp_result(result)
-                context["worksheet"] = ws or {}
-                if err:
-                    errors["worksheet"] = err
+                ws, err = parse_mcp_result(res)
+                return ws or {}, err or ""
             except Exception as e:
                 logger.warning(f"Failed to fetch worksheet: {e}")
-                context["worksheet"] = {}
-                errors["worksheet"] = str(e)
-        else:
-            context["worksheet"] = {}
+                return {}, str(e)
+        return {}, ""
 
-    # 3. Extract Product from expand
-    product_data = expand.get("product_id")
-    if product_data:
-        context["product"] = product_data
-    else:
-        product_id = campaign_data.get("product_id")
+    async def fetch_prod():
+        if product_data:
+            return product_data, ""
         if product_id:
             try:
-                result = await execute_mcp_tool(
+                res = await execute_mcp_tool(
                     "get_record",
                     {
                         "collection": "products_services",
@@ -84,68 +81,75 @@ async def fetch_campaign_context(campaign_id: str) -> Tuple[Dict[str, Any], Dict
                         "expand": "brand_id",
                     },
                 )
-                prod, err = parse_mcp_result(result)
-                context["product"] = prod or {}
-                if err:
-                    errors["product"] = err
+                prod, err = parse_mcp_result(res)
+                return prod or {}, err or ""
             except Exception as e:
                 logger.warning(f"Failed to fetch product: {e}")
-                context["product"] = {}
-                errors["product"] = str(e)
-        else:
-            context["product"] = {}
+                return {}, str(e)
+        return {}, ""
 
-    # 4. Extract Brand Identity: prefer product->brand expand, fallback to worksheet.brandRefs
+    (ws_res, ws_err), (prod_res, prod_err) = await asyncio.gather(fetch_ws(), fetch_prod())
+
+    context["worksheet"] = ws_res
+    if ws_err:
+        errors["worksheet"] = ws_err
+
+    context["product"] = prod_res
+    if prod_err:
+        errors["product"] = prod_err
+
+    # PHASE 2: Fetch Brand Identity & Customer Profile concurrently
     brand_data = None
-    # Try product.expand.brand_id first
-    product = context.get("product", {})
-    if product:
-        brand_data = product.get("expand", {}).get("brand_id")
-    # Also try campaign.expand.product_id.expand.brand_id
+    if context["product"]:
+        brand_data = context["product"].get("expand", {}).get("brand_id")
     if not brand_data and expand.get("product_id"):
         brand_data = expand["product_id"].get("expand", {}).get("brand_id")
 
-    if brand_data:
-        context["brandIdentity"] = brand_data
-    else:
-        # Fallback: fetch first brandRef from worksheet
-        worksheet = context.get("worksheet", {})
-        brand_refs = worksheet.get("brandRefs", [])
+    brand_id_to_fetch = None
+    if not brand_data:
+        brand_refs = context["worksheet"].get("brandRefs", [])
         if brand_refs and len(brand_refs) > 0:
+            brand_id_to_fetch = brand_refs[0]
+
+    customer_refs = context["worksheet"].get("customerRefs", [])
+    customer_id_to_fetch = customer_refs[0] if customer_refs and len(customer_refs) > 0 else None
+
+    async def fetch_brand():
+        if brand_data:
+            return brand_data, ""
+        if brand_id_to_fetch:
             try:
-                result = await execute_mcp_tool(
-                    "get_record",
-                    {"collection": "brand_identities", "record_id": brand_refs[0]},
+                res = await execute_mcp_tool(
+                    "get_record", {"collection": "brand_identities", "record_id": brand_id_to_fetch}
                 )
-                brand, err = parse_mcp_result(result)
-                context["brandIdentity"] = brand or {}
-                if err:
-                    errors["brandIdentity"] = err
+                b, err = parse_mcp_result(res)
+                return b or {}, err or ""
             except Exception as e:
                 logger.warning(f"Failed to fetch brand identity: {e}")
-                context["brandIdentity"] = {}
-                errors["brandIdentity"] = str(e)
-        else:
-            context["brandIdentity"] = {}
+                return {}, str(e)
+        return {}, ""
 
-    # 5. Fetch Customer Profile from worksheet.customerRefs
-    worksheet = context.get("worksheet", {})
-    customer_refs = worksheet.get("customerRefs", [])
-    if customer_refs and len(customer_refs) > 0:
-        try:
-            result = await execute_mcp_tool(
-                "get_record",
-                {"collection": "customer_personas", "record_id": customer_refs[0]},
-            )
-            profile, err = parse_mcp_result(result)
-            context["customerProfile"] = profile or {}
-            if err:
-                errors["customerProfile"] = err
-        except Exception as e:
-            logger.warning(f"Failed to fetch customer profile: {e}")
-            context["customerProfile"] = {}
-            errors["customerProfile"] = str(e)
-    else:
-        context["customerProfile"] = {}
+    async def fetch_customer():
+        if customer_id_to_fetch:
+            try:
+                res = await execute_mcp_tool(
+                    "get_record", {"collection": "customer_personas", "record_id": customer_id_to_fetch}
+                )
+                c, err = parse_mcp_result(res)
+                return c or {}, err or ""
+            except Exception as e:
+                logger.warning(f"Failed to fetch customer profile: {e}")
+                return {}, str(e)
+        return {}, ""
+
+    (brand_res, brand_err), (cust_res, cust_err) = await asyncio.gather(fetch_brand(), fetch_customer())
+
+    context["brandIdentity"] = brand_res
+    if brand_err:
+        errors["brandIdentity"] = brand_err
+
+    context["customerProfile"] = cust_res
+    if cust_err:
+        errors["customerProfile"] = cust_err
 
     return context, errors
