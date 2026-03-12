@@ -1,0 +1,3 @@
+## 2024-03-12 - [Asyncio Gather for MCP Fetch in Async Generators]
+**Learning:** Sequential MCP queries using loops in an async generator create significant N+1 latency. However, you cannot directly yield SSE events inside the concurrent tasks being executed by `asyncio.gather` within an async generator.
+**Action:** Always extract single-record fetch logic into a helper coroutine. Execute the batch concurrently using `asyncio.gather`. To maintain UX, emit all relevant "fetching" SSE status events sequentially immediately before calling `asyncio.gather`.
