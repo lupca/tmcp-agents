@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import json
 from typing import AsyncGenerator
@@ -29,27 +30,42 @@ async def worksheet_event_generator(
                 args["auth_token"] = auth_token
             return args
 
-        # Fetch Brands
-        brand_contexts = []
+        async def fetch_brand(bid: str) -> dict | None:
+            try:
+                res = await execute_mcp_tool("get_record", _mcp_args("brand_identities", bid))
+                return json.loads(res.content[0].text)
+            except Exception as e:
+                logger.warning(f"Failed to fetch brand {bid}: {e}")
+                return None
+
+        async def fetch_customer(cid: str) -> dict | None:
+            try:
+                res = await execute_mcp_tool("get_record", _mcp_args("customer_personas", cid))
+                return json.loads(res.content[0].text)
+            except Exception as e:
+                logger.warning(f"Failed to fetch customer {cid}: {e}")
+                return None
+
+        # Emit all UI status events sequentially before gathering tasks
         if brand_ids:
             yield sse_event("status", status="fetching_brands", agent="MarketingStrategist")
-            for bid in brand_ids:
-                try:
-                    res = await execute_mcp_tool("get_record", _mcp_args("brand_identities", bid))
-                    brand_contexts.append(json.loads(res.content[0].text))
-                except Exception as e:
-                    logger.warning(f"Failed to fetch brand {bid}: {e}")
-
-        # Fetch Customers
-        customer_contexts = []
         if customer_ids:
             yield sse_event("status", status="fetching_customers", agent="MarketingStrategist")
-            for cid in customer_ids:
-                try:
-                    res = await execute_mcp_tool("get_record", _mcp_args("customer_personas", cid))
-                    customer_contexts.append(json.loads(res.content[0].text))
-                except Exception as e:
-                    logger.warning(f"Failed to fetch customer {cid}: {e}")
+
+        # Execute all MCP fetching tasks concurrently
+        safe_brand_ids = brand_ids or []
+        safe_customer_ids = customer_ids or []
+
+        tasks = []
+        for bid in safe_brand_ids:
+            tasks.append(fetch_brand(bid))
+        for cid in safe_customer_ids:
+            tasks.append(fetch_customer(cid))
+
+        results = await asyncio.gather(*tasks) if tasks else []
+
+        brand_contexts = [res for res in results[:len(safe_brand_ids)] if res is not None]
+        customer_contexts = [res for res in results[len(safe_brand_ids):] if res is not None]
 
         yield sse_event("status", status="thinking", agent="MarketingStrategist")
 
