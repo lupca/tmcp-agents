@@ -1,7 +1,5 @@
 import asyncio
-import json
 import logging
-import uuid
 from typing import AsyncGenerator
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -129,11 +127,24 @@ async def content_briefs_event_generator(
 
         results = await asyncio.gather(*tasks)
 
-        # Step 3: Save all generated briefs to PocketBase
+        # Step 3: Save all generated briefs to PocketBase concurrently
         yield sse_event("status", status="active", agent="ContentBriefs", step="Saving content briefs to database...")
 
         total_created = 0
         stage_errors = []
+        save_tasks = []
+
+        async def _save_brief(record_data: dict, stage_name: str) -> bool:
+            try:
+                save_result = await execute_mcp_tool("create_record", record_data)
+                _, save_err = parse_mcp_result(save_result)
+                if save_err:
+                    logger.warning(f"Failed to save brief for {stage_name}: {save_err}")
+                    return False
+                return True
+            except Exception as e:
+                logger.warning(f"Failed to save brief for {stage_name}: {e}")
+                return False
 
         for result in results:
             stage = result["stage"]
@@ -143,34 +154,30 @@ async def content_briefs_event_generator(
                                 step=f"Error generating {stage}: {result['error']}")
                 continue
 
-            angles = result["angles"]
+            angles = result.get("angles") or []
             yield sse_event("status", status="active", agent="ContentBriefs",
                             step=f"Saving {len(angles)} briefs for {stage}...")
 
             for angle in angles:
-                try:
-                    record_data = {
-                        "collection": "content_briefs",
-                        "data": {
-                            "workspace_id": workspace_id,
-                            "campaign_id": campaign_id,
-                            "angle_name": angle.get("angle_name", "Untitled"),
-                            "funnel_stage": stage,
-                            "psychological_angle": angle.get("psychological_angle", "Logic"),
-                            "pain_point_focus": angle.get("pain_point_focus", ""),
-                            "key_message_variation": angle.get("key_message_variation", ""),
-                            "call_to_action_direction": angle.get("call_to_action_direction", ""),
-                            "brief": angle.get("brief", ""),
-                        },
-                    }
-                    save_result = await execute_mcp_tool("create_record", record_data)
-                    _, save_err = parse_mcp_result(save_result)
-                    if save_err:
-                        logger.warning(f"Failed to save brief: {save_err}")
-                    else:
-                        total_created += 1
-                except Exception as e:
-                    logger.warning(f"Failed to save brief for {stage}: {e}")
+                record_data = {
+                    "collection": "content_briefs",
+                    "data": {
+                        "workspace_id": workspace_id,
+                        "campaign_id": campaign_id,
+                        "angle_name": angle.get("angle_name", "Untitled"),
+                        "funnel_stage": stage,
+                        "psychological_angle": angle.get("psychological_angle", "Logic"),
+                        "pain_point_focus": angle.get("pain_point_focus", ""),
+                        "key_message_variation": angle.get("key_message_variation", ""),
+                        "call_to_action_direction": angle.get("call_to_action_direction", ""),
+                        "brief": angle.get("brief", ""),
+                    },
+                }
+                save_tasks.append(_save_brief(record_data, stage))
+
+        if save_tasks:
+            save_results = await asyncio.gather(*save_tasks)
+            total_created = sum(1 for success in save_results if success)
 
         # Step 4: Done
         if stage_errors:
