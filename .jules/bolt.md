@@ -1,0 +1,3 @@
+## 2024-05-24 - Parallelize Sequential MCP Tool Execution
+**Learning:** Sequential MCP tool calls create N+1 query bottlenecks resulting in significant latency in agent services like `worksheet_event_generator`. When refactoring synchronous loops into parallel operations using `asyncio.gather`, all SSE (Server-Sent Event) `yield` statements must be emitted sequentially before executing the concurrent tasks, as `yield` cannot be used directly inside gathered concurrent tasks.
+**Action:** Always extract single-record fetching logic into internal helper coroutines (`async def`) and execute them concurrently with `asyncio.gather`. Pre-emit UI status events to reflect intent before initiating parallel execution.
