@@ -29,27 +29,30 @@ async def worksheet_event_generator(
                 args["auth_token"] = auth_token
             return args
 
-        # Fetch Brands
-        brand_contexts = []
+        import asyncio
+
+        async def _fetch_record(collection: str, record_id: str):
+            try:
+                res = await execute_mcp_tool("get_record", _mcp_args(collection, record_id))
+                return json.loads(res.content[0].text)
+            except Exception as e:
+                logger.warning(f"Failed to fetch {collection} {record_id}: {e}")
+                return None
+
+        # Yield status events before concurrent fetching
         if brand_ids:
             yield sse_event("status", status="fetching_brands", agent="MarketingStrategist")
-            for bid in brand_ids:
-                try:
-                    res = await execute_mcp_tool("get_record", _mcp_args("brand_identities", bid))
-                    brand_contexts.append(json.loads(res.content[0].text))
-                except Exception as e:
-                    logger.warning(f"Failed to fetch brand {bid}: {e}")
-
-        # Fetch Customers
-        customer_contexts = []
         if customer_ids:
             yield sse_event("status", status="fetching_customers", agent="MarketingStrategist")
-            for cid in customer_ids:
-                try:
-                    res = await execute_mcp_tool("get_record", _mcp_args("customer_personas", cid))
-                    customer_contexts.append(json.loads(res.content[0].text))
-                except Exception as e:
-                    logger.warning(f"Failed to fetch customer {cid}: {e}")
+
+        brand_tasks = [_fetch_record("brand_identities", bid) for bid in brand_ids] if brand_ids else []
+        customer_tasks = [_fetch_record("customer_personas", cid) for cid in customer_ids] if customer_ids else []
+
+        brand_results = await asyncio.gather(*brand_tasks)
+        customer_results = await asyncio.gather(*customer_tasks)
+
+        brand_contexts = [r for r in brand_results if r is not None]
+        customer_contexts = [r for r in customer_results if r is not None]
 
         yield sse_event("status", status="thinking", agent="MarketingStrategist")
 
