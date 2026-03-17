@@ -129,11 +129,39 @@ async def content_briefs_event_generator(
 
         results = await asyncio.gather(*tasks)
 
+        # Helper function to save a single brief
+        async def _save_brief(angle: dict, stage: str) -> bool:
+            try:
+                record_data = {
+                    "collection": "content_briefs",
+                    "data": {
+                        "workspace_id": workspace_id,
+                        "campaign_id": campaign_id,
+                        "angle_name": angle.get("angle_name", "Untitled"),
+                        "funnel_stage": stage,
+                        "psychological_angle": angle.get("psychological_angle", "Logic"),
+                        "pain_point_focus": angle.get("pain_point_focus", ""),
+                        "key_message_variation": angle.get("key_message_variation", ""),
+                        "call_to_action_direction": angle.get("call_to_action_direction", ""),
+                        "brief": angle.get("brief", ""),
+                    },
+                }
+                save_result = await execute_mcp_tool("create_record", record_data)
+                _, save_err = parse_mcp_result(save_result)
+                if save_err:
+                    logger.warning(f"Failed to save brief: {save_err}")
+                    return False
+                return True
+            except Exception as e:
+                logger.warning(f"Failed to save brief for {stage}: {e}")
+                return False
+
         # Step 3: Save all generated briefs to PocketBase
         yield sse_event("status", status="active", agent="ContentBriefs", step="Saving content briefs to database...")
 
         total_created = 0
         stage_errors = []
+        save_tasks = []
 
         for result in results:
             stage = result["stage"]
@@ -145,32 +173,16 @@ async def content_briefs_event_generator(
 
             angles = result["angles"]
             yield sse_event("status", status="active", agent="ContentBriefs",
-                            step=f"Saving {len(angles)} briefs for {stage}...")
+                            step=f"Queueing {len(angles)} briefs for {stage}...")
 
             for angle in angles:
-                try:
-                    record_data = {
-                        "collection": "content_briefs",
-                        "data": {
-                            "workspace_id": workspace_id,
-                            "campaign_id": campaign_id,
-                            "angle_name": angle.get("angle_name", "Untitled"),
-                            "funnel_stage": stage,
-                            "psychological_angle": angle.get("psychological_angle", "Logic"),
-                            "pain_point_focus": angle.get("pain_point_focus", ""),
-                            "key_message_variation": angle.get("key_message_variation", ""),
-                            "call_to_action_direction": angle.get("call_to_action_direction", ""),
-                            "brief": angle.get("brief", ""),
-                        },
-                    }
-                    save_result = await execute_mcp_tool("create_record", record_data)
-                    _, save_err = parse_mcp_result(save_result)
-                    if save_err:
-                        logger.warning(f"Failed to save brief: {save_err}")
-                    else:
-                        total_created += 1
-                except Exception as e:
-                    logger.warning(f"Failed to save brief for {stage}: {e}")
+                save_tasks.append(_save_brief(angle, stage))
+
+        # Execute all save tasks concurrently
+        # Optimization: Replaces N sequential network/DB calls with a single concurrent batch
+        if save_tasks:
+            save_results = await asyncio.gather(*save_tasks)
+            total_created = sum(1 for res in save_results if res)
 
         # Step 4: Done
         if stage_errors:
