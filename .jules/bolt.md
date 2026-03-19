@@ -1,0 +1,3 @@
+## 2024-03-19 - N+1 Query Fix in Strategy Service
+**Learning:** Found sequential MCP data fetching for `brand_identities`, `customer_personas`, and `products_services` in `marketing_strategy_event_generator` causing unnecessary N+1 query latency. The Async Generator Pattern requires yielding all related 'start' SSE events sequentially before invoking `asyncio.gather(..., return_exceptions=True)` to parallelize the fetch.
+**Action:** Extract single-record creation or fetching logic into helper coroutines and execute the batch concurrently using `asyncio.gather` while maintaining proper error handling for critical vs optional tasks.
