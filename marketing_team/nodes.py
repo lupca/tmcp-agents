@@ -117,8 +117,8 @@ supervisor_chain = (
     | llm
 )
 
-def supervisor_node(state: MarketingState):
-    result = supervisor_chain.invoke(state)
+async def supervisor_node(state: MarketingState, config: RunnableConfig):
+    result = await supervisor_chain.ainvoke(state, config)
     next_agent = result.content.strip()
     
     # Simple parsing to clearer logic
