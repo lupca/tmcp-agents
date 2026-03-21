@@ -23,33 +23,38 @@ async def worksheet_event_generator(
     Generates SSE events for worksheet creation using a direct LLM call.
     """
     try:
+        import asyncio
+
         def _mcp_args(collection: str, record_id: str) -> dict:
             args = {"collection": collection, "record_id": record_id}
             if auth_token:
                 args["auth_token"] = auth_token
             return args
 
-        # Fetch Brands
+        async def fetch_record(collection: str, record_id: str) -> dict | None:
+            try:
+                res = await execute_mcp_tool("get_record", _mcp_args(collection, record_id))
+                return json.loads(res.content[0].text)
+            except Exception as e:
+                logger.warning(f"Failed to fetch {collection} {record_id}: {e}")
+                return None
+
         brand_contexts = []
+        customer_contexts = []
+
+        # Fetch Brands
         if brand_ids:
             yield sse_event("status", status="fetching_brands", agent="MarketingStrategist")
-            for bid in brand_ids:
-                try:
-                    res = await execute_mcp_tool("get_record", _mcp_args("brand_identities", bid))
-                    brand_contexts.append(json.loads(res.content[0].text))
-                except Exception as e:
-                    logger.warning(f"Failed to fetch brand {bid}: {e}")
+            brand_tasks = [fetch_record("brand_identities", bid) for bid in brand_ids]
+            results = await asyncio.gather(*brand_tasks)
+            brand_contexts = [r for r in results if r is not None]
 
         # Fetch Customers
-        customer_contexts = []
         if customer_ids:
             yield sse_event("status", status="fetching_customers", agent="MarketingStrategist")
-            for cid in customer_ids:
-                try:
-                    res = await execute_mcp_tool("get_record", _mcp_args("customer_personas", cid))
-                    customer_contexts.append(json.loads(res.content[0].text))
-                except Exception as e:
-                    logger.warning(f"Failed to fetch customer {cid}: {e}")
+            customer_tasks = [fetch_record("customer_personas", cid) for cid in customer_ids]
+            results = await asyncio.gather(*customer_tasks)
+            customer_contexts = [r for r in results if r is not None]
 
         yield sse_event("status", status="thinking", agent="MarketingStrategist")
 
